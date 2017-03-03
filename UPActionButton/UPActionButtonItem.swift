@@ -18,16 +18,19 @@ class UPActionButtonItem: UIView {
 
     // MARK: - Properties
     fileprivate var tapButton: UIButton!
+    fileprivate var titleLabel: UILabel!
     fileprivate var action: (() -> Void)?
     fileprivate var isExpanded: Bool = false
     fileprivate var isAnimating: Bool = false
     
-    var baseButton: UIButton!
-    var titleLabel: UILabel!
-    var internMargin: CGFloat = 5.0
-    var closeOnTap: Bool = true
+    fileprivate var titleLabelSize: CGSize {
+        guard let title = titleLabel.text else {
+            return .zero
+        }
+        return (title as NSString).size(attributes: [NSFontAttributeName: titleLabel.font])
+    }
     
-    var delegate: UPActionButtonItemDelegate?
+    var button: UIButton!
     
     var size: CGSize = .zero {
         didSet {
@@ -41,40 +44,56 @@ class UPActionButtonItem: UIView {
             titleLabel.frame = CGRect(origin: .zero, size: titleSize)
             titleLabel.center = CGPoint(x: titleSize.width/2.0, y: frame.size.height/2.0)
             
-            baseButton.frame = CGRect(origin: .zero, size: size)
-            baseButton.center = CGPoint(x: frame.size.width - size.width/2.0, y: frame.size.height/2.0)
-            baseButton.layer.cornerRadius = min(size.width, size.height) / 2.0
+            button.frame = CGRect(origin: .zero, size: size)
+            button.center = CGPoint(x: frame.size.width - size.width/2.0, y: frame.size.height/2.0)
+            button.layer.cornerRadius = min(size.width, size.height) / 2.0
         }
-    }
-    
-    var titleLabelSize: CGSize {
-        guard let title = titleLabel.text else {
-            return .zero
-        }
-        return (title as NSString).size(attributes: [NSFontAttributeName: titleLabel.font])
     }
     
     var itemCenter: CGPoint {
-        get { return baseButton.center }
+        get { return button.center }
         set { self.center = self.centerForItemCenter(newValue) }
     }
     
+    var delegate: UPActionButtonItemDelegate?
+    
+    /* Customization */
+    var internMargin: CGFloat = 5.0
+    var closeOnTap: Bool = true
+    var titleColor: UIColor {
+        get { return titleLabel.textColor }
+        set { titleLabel.textColor = newValue }
+    }
+    var titleFont: UIFont {
+        get { return titleLabel.font }
+        set { titleLabel.font = newValue }
+    }
+    var color: UIColor? {
+        get { return button.backgroundColor }
+        set { button.backgroundColor = newValue }
+    }
+    var cornerRadius: CGFloat {
+        get { return button.layer.cornerRadius }
+        set { button.layer.cornerRadius = newValue }
+    }
     
     // MARK: - Initialization
-    init(title: String, iconImage: UIImage?, iconText: String?, action: (() -> Void)?) {
+    init(title: String, buttonImage: UIImage?, buttonText: String?, action: (() -> Void)?) {
         super.init(frame: .zero)
         
         titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.textColor = UIColor.white
         titleLabel.alpha = 0.0
         self.addSubview(titleLabel)
         
-        baseButton = UIButton(type: .custom)
-        baseButton.backgroundColor = UIColor.red
-        baseButton.setTitle(iconText, for: .normal)
-        baseButton.isUserInteractionEnabled = false
-        self.addSubview(baseButton)
+        button = UIButton(type: .custom)
+        button.isUserInteractionEnabled = false
+        if let image = buttonImage {
+            button.setImage(image, for: .normal)
+        } else if let text = buttonText {
+            button.setTitle(text, for: .normal)
+        }
+        self.addSubview(button)
         
         tapButton = UIButton(type: .custom)
         tapButton.autoresizingMask = [.flexibleHeight, .flexibleWidth]
@@ -133,7 +152,7 @@ extension UPActionButtonItem {
         
         let operations = {
             var titleFrame = self.titleLabel.frame
-            titleFrame.origin.x = self.baseButton.center.x
+            titleFrame.origin.x = self.button.center.x
             titleFrame.size.width = 0
             self.titleLabel.frame = titleFrame
             self.titleLabel.alpha = 0.0
@@ -152,8 +171,8 @@ extension UPActionButtonItem {
     }
     
     func centerForItemCenter(_ center: CGPoint) -> CGPoint {
-        let offsetX = baseButton.center.x - self.frame.size.width/2.0
-        let offsetY = baseButton.center.y - self.frame.size.height/2.0
+        let offsetX = button.center.x - self.frame.size.width/2.0
+        let offsetY = button.center.y - self.frame.size.height/2.0
         return CGPoint(x: center.x - offsetX, y: center.y - offsetY)
     }
     
@@ -163,12 +182,21 @@ extension UPActionButtonItem {
     }
     
     
+    /* Customization */
+    
+    func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
+        button.layer.shadowColor = color.cgColor
+        button.layer.shadowOpacity = opacity
+        button.layer.shadowRadius = radius
+        button.layer.shadowOffset = offset
+    }
+    
+    
     /* Observers */
     
     override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
         if (object as? UIButton) === tapButton && keyPath == "highlighted" {
-            print("should highlight")
-            baseButton.isHighlighted = tapButton.isHighlighted
+            button.isHighlighted = tapButton.isHighlighted
         }
     }
 }

@@ -16,36 +16,101 @@ import UIKit
     @objc optional func actionButtonDidClose(_: UPActionButton)
 }
 
+enum UPActionButtonTransitionType {
+    case none
+    case rotate(CGFloat)
+    case crossDissolveImage(UIImage)
+    case crossDissolveText(String)
+}
+
 class UPActionButton: UIView {
 
     // MARK: - Properties
     fileprivate var backgroundView: UIView!
     fileprivate var containerView: UIView!
+    fileprivate var button: UIButton!
+    fileprivate var openTitleLabel: UILabel!
+    fileprivate var closedTitleLabel: UILabel!
+    fileprivate var openTitleImageView: UIImageView!
+    fileprivate var closedTitleImageView: UIImageView!
+    fileprivate var visibleOpenTitleView: UIView? {
+        if openTitleImageView.image != nil {
+            return openTitleImageView
+        }
+        if openTitleLabel.text != nil {
+            return openTitleLabel
+        }
+        return nil
+    }
+
     fileprivate var containerOpenSize: CGSize = .zero
     fileprivate var baseButtonOpenCenter: CGPoint = .zero
     fileprivate var isOpen = false
     fileprivate var isAnimating = false
     fileprivate var animatedItemTag: Int = 0
-    
     fileprivate let superviewBoundsKeyPath = "layer.bounds"
     fileprivate var observesSuperviewBounds = false
     
     fileprivate(set) var items = [UPActionButtonItem]()
     
-    var button: UIButton!
-    var itemSize: CGSize = CGSize(width: 30, height: 30)
+    weak var delegate: UPActionButtonDelegate?
+    
+    /* Customization */
+    var itemSize: CGSize = CGSize(width: 30, height: 30) {
+        didSet {
+            items.forEach({ $0.size = itemSize })
+        }
+    }
     var itemsInterSpacing: CGFloat = 10.0
     var animationDuration: TimeInterval = 0.6
-    
-    weak var delegate: UPActionButtonDelegate?
+    var transitionType: UPActionButtonTransitionType = .none
+    var image: UIImage? {
+        get { return openTitleImageView.image }
+        set {
+            openTitleImageView.image = newValue
+            openTitleImageView.isHidden = false
+            openTitleLabel.text = nil
+            openTitleLabel.isHidden = true
+        }
+    }
+    var title: String? {
+        get { return openTitleLabel.text }
+        set {
+            openTitleLabel.text = newValue
+            openTitleLabel.isHidden = false
+            openTitleImageView.image = nil
+            openTitleImageView.isHidden = true
+        }
+    }
+    var titleColor: UIColor {
+        get { return openTitleLabel.textColor }
+        set {
+            openTitleLabel.textColor = newValue
+            closedTitleLabel.textColor = newValue
+        }
+    }
+    var font: UIFont {
+        get { return openTitleLabel.font }
+        set {
+            openTitleLabel.font = newValue
+            closedTitleLabel.font = newValue
+        }
+    }
+    var color: UIColor? {
+        get { return button.backgroundColor }
+        set { button.backgroundColor = newValue }
+    }
+    var cornerRadius: CGFloat {
+        get { return button.layer.cornerRadius }
+        set { button.layer.cornerRadius = newValue }
+    }
     
     
     // MARK: - Initialization
-    public override init(frame: CGRect) {
+    public init(frame: CGRect, image: UIImage?, title: String?) {
         super.init(frame: frame)
         
         let innerFrame = CGRect(origin: .zero, size: frame.size)
-        let cornerRadius = max(innerFrame.size.width, innerFrame.size.height) / 2.0
         
         backgroundView = UIView(frame: innerFrame)
         backgroundView.backgroundColor = UIColor(white: 1.0, alpha: 0.4)
@@ -55,19 +120,41 @@ class UPActionButton: UIView {
         self.addSubview(backgroundView)
         
         containerView = UIView(frame: innerFrame)
-        containerView.clipsToBounds = true
-        containerView.backgroundColor = UIColor.gray
+//        containerView.clipsToBounds = true
         self.addSubview(containerView)
         
         button = UIButton(type: .custom)
         button.frame = innerFrame
-        button.backgroundColor = UIColor.blue
-        button.layer.cornerRadius = cornerRadius
-        button.setTitle("B", for: .normal)
-        button.setTitleColor(UIColor.white, for: .normal)
-        button.setTitleColor(UIColor.lightGray, for: .highlighted)
         button.addTarget(self, action: #selector(toggle), for: .touchUpInside)
         containerView.addSubview(button)
+        
+        openTitleLabel = UILabel()
+        closedTitleLabel = UILabel()
+        [openTitleLabel, closedTitleLabel].forEach { (label: UILabel) in
+            label.frame = innerFrame.insetBy(dx: 10, dy: 10)
+            label.alpha = 0.0
+            label.isHidden = true
+            label.textAlignment = .center
+            button.addSubview(label)
+        }
+        
+        openTitleImageView = UIImageView()
+        closedTitleImageView = UIImageView()
+        [openTitleImageView, closedTitleImageView].forEach { (image: UIImageView!) in
+            image.frame = innerFrame.insetBy(dx: 10, dy: 10)
+            image.alpha = 0.0
+            image.isHidden = true
+            image.contentMode = .scaleAspectFill
+            button.addSubview(image)
+        }
+        
+        if let image = image {
+            self.image = image
+            openTitleImageView.alpha = 1.0
+        } else if let title = title {
+            self.title = title
+            openTitleLabel.alpha = 1.0
+        }
     }
     
     override func willMove(toSuperview newSuperview: UIView?) {
@@ -146,6 +233,7 @@ extension UPActionButton {
         
         expandContainers(to: superFrame)
         expandItems()
+        transitionButtonTitle()
     }
     
     func close() {
@@ -158,8 +246,18 @@ extension UPActionButton {
         animatedItemTag = 0
         
         reduceItems()
+        transitionButtonTitle()
     }
     
+    
+    /* Customization */
+    
+    func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
+        button.layer.shadowColor = color.cgColor
+        button.layer.shadowOpacity = opacity
+        button.layer.shadowRadius = radius
+        button.layer.shadowOffset = offset
+    }
     
     /* Observers */
     
@@ -357,5 +455,46 @@ extension UPActionButton: CAAnimationDelegate {
         }
         
         isAnimating = false
+    }
+    
+    func transitionButtonTitle() {
+        let duration = animationDuration / 2.0
+        switch transitionType {
+        case .none: break
+            
+        case .rotate(let angle):
+            guard let titleView = self.visibleOpenTitleView else { return }
+            UIView.animate(withDuration: duration, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 5.0, options: .curveEaseInOut, animations: {
+                    titleView.transform = self.isOpen ? CGAffineTransform(rotationAngle: angle) : CGAffineTransform.identity
+            }, completion: nil)
+            
+        case .crossDissolveText(let title):
+            if isOpen {
+                closedTitleLabel.text = title
+            }
+            closedTitleLabel.isHidden = false
+            visibleOpenTitleView?.isHidden = false
+            UIView.animate(withDuration: duration, animations: {
+                self.visibleOpenTitleView?.alpha = self.isOpen ? 0.0 : 1.0
+                self.closedTitleLabel.alpha = self.isOpen ? 1.0 : 0.0
+            }, completion: { (finished: Bool) in
+                self.visibleOpenTitleView?.isHidden = self.isOpen
+                self.closedTitleLabel.isHidden = !self.isOpen
+            })
+            
+        case .crossDissolveImage(let image):
+            if isOpen {
+                closedTitleImageView.image = image
+            }
+            closedTitleImageView.isHidden = false
+            visibleOpenTitleView?.isHidden = false
+            UIView.animate(withDuration: duration, animations: {
+                self.visibleOpenTitleView?.alpha = self.isOpen ? 0.0 : 1.0
+                self.closedTitleImageView.alpha = self.isOpen ? 1.0 : 0.0
+            }, completion: { (finished: Bool) in
+                self.visibleOpenTitleView?.isHidden = self.isOpen
+                self.closedTitleImageView.isHidden = !self.isOpen
+            })
+        }
     }
 }
