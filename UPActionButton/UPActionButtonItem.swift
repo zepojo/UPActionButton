@@ -9,13 +9,13 @@
 import UIKit
 
 
-protocol UPActionButtonItemDelegate {
+public protocol UPActionButtonItemDelegate {
     func didTouch(item: UPActionButtonItem)
 }
 
 
-class UPActionButtonItem: UIView {
-
+open class UPActionButtonItem: UIView {
+    
     // MARK: - Properties
     fileprivate var tapButton: UIButton!
     fileprivate var titleLabel: UILabel!
@@ -30,9 +30,9 @@ class UPActionButtonItem: UIView {
         return (title as NSString).size(attributes: [NSFontAttributeName: titleLabel.font])
     }
     
-    var button: UIButton!
+    public var button: UIButton!
     
-    var size: CGSize = .zero {
+    public var size: CGSize = .zero {
         didSet {
             let titleSize = titleLabelSize
             
@@ -50,35 +50,35 @@ class UPActionButtonItem: UIView {
         }
     }
     
-    var itemCenter: CGPoint {
+    public var itemCenter: CGPoint {
         get { return button.center }
         set { self.center = self.centerForItemCenter(newValue) }
     }
     
-    var delegate: UPActionButtonItemDelegate?
+    public var delegate: UPActionButtonItemDelegate?
     
     /* Customization */
-    var internMargin: CGFloat = 5.0
-    var closeOnTap: Bool = true
-    var titleColor: UIColor {
+    public var internMargin: CGFloat = 5.0
+    public var closeOnTap: Bool = true
+    public var titleColor: UIColor {
         get { return titleLabel.textColor }
         set { titleLabel.textColor = newValue }
     }
-    var titleFont: UIFont {
+    public var titleFont: UIFont {
         get { return titleLabel.font }
         set { titleLabel.font = newValue }
     }
-    var color: UIColor? {
+    public var color: UIColor? {
         get { return button.backgroundColor }
         set { button.backgroundColor = newValue }
     }
-    var cornerRadius: CGFloat {
+    public var cornerRadius: CGFloat {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
     }
     
     // MARK: - Initialization
-    init(title: String, buttonImage: UIImage?, buttonText: String?, action: (() -> Void)?) {
+    public init(title: String, buttonImage: UIImage?, buttonText: String?, action: (() -> Void)?) {
         super.init(frame: .zero)
         
         titleLabel = UILabel()
@@ -104,7 +104,7 @@ class UPActionButtonItem: UIView {
         self.action = action
     }
     
-    required init?(coder aDecoder: NSCoder) {
+    required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
@@ -120,7 +120,7 @@ extension UPActionButtonItem {
     
     /* Interactions */
     
-    func expand(animated: Bool, duration: TimeInterval) {
+    open func expand(animated: Bool, duration: TimeInterval) {
         guard !isExpanded && !isAnimating else { return }
         
         isExpanded = true
@@ -145,7 +145,7 @@ extension UPActionButtonItem {
         }
     }
     
-    func reduce(animated: Bool, duration: TimeInterval) {
+    open func reduce(animated: Bool, duration: TimeInterval) {
         guard isExpanded && !isAnimating else { return }
         
         isExpanded = false
@@ -170,7 +170,7 @@ extension UPActionButtonItem {
         }
     }
     
-    func centerForItemCenter(_ center: CGPoint) -> CGPoint {
+    open func centerForItemCenter(_ center: CGPoint) -> CGPoint {
         let offsetX = button.center.x - self.frame.size.width/2.0
         let offsetY = button.center.y - self.frame.size.height/2.0
         return CGPoint(x: center.x - offsetX, y: center.y - offsetY)
@@ -184,7 +184,7 @@ extension UPActionButtonItem {
     
     /* Customization */
     
-    func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
+    open func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
         button.layer.shadowColor = color.cgColor
         button.layer.shadowOpacity = opacity
         button.layer.shadowRadius = radius
@@ -194,7 +194,7 @@ extension UPActionButtonItem {
     
     /* Observers */
     
-    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+    override open func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
         if (object as? UIButton) === tapButton && keyPath == "highlighted" {
             button.isHighlighted = tapButton.isHighlighted
         }

@@ -9,22 +9,22 @@
 import UIKit
 
 
-@objc protocol UPActionButtonDelegate {
+@objc public protocol UPActionButtonDelegate {
     @objc optional func actionButtonWillOpen(_: UPActionButton)
     @objc optional func actionButtonDidOpen(_: UPActionButton)
     @objc optional func actionButtonWillClose(_: UPActionButton)
     @objc optional func actionButtonDidClose(_: UPActionButton)
 }
 
-enum UPActionButtonTransitionType {
+public enum UPActionButtonTransitionType {
     case none
     case rotate(CGFloat)
     case crossDissolveImage(UIImage)
     case crossDissolveText(String)
 }
 
-class UPActionButton: UIView {
-
+open class UPActionButton: UIView {
+    
     // MARK: - Properties
     fileprivate var backgroundView: UIView!
     fileprivate var containerView: UIView!
@@ -42,7 +42,7 @@ class UPActionButton: UIView {
         }
         return nil
     }
-
+    
     fileprivate var containerOpenSize: CGSize = .zero
     fileprivate var baseButtonOpenCenter: CGPoint = .zero
     fileprivate var isAnimating = false
@@ -55,9 +55,9 @@ class UPActionButton: UIView {
     
     fileprivate(set) var items = [UPActionButtonItem]()
     
-    weak var delegate: UPActionButtonDelegate?
+    public var delegate: UPActionButtonDelegate?
     
-    var observedScrollView: UIScrollView? {
+    public var observedScrollView: UIScrollView? {
         didSet {
             if let scrollView = oldValue, observesScrollview {
                 scrollView.removeObserver(self, forKeyPath: scrollviewScrollKeyPath)
@@ -70,18 +70,18 @@ class UPActionButton: UIView {
         }
     }
     
-    var isOpen = false
+    public var isOpen = false
     
     /* Customization */
-    var itemSize: CGSize = CGSize(width: 30, height: 30) {
+    public var itemSize: CGSize = CGSize(width: 30, height: 30) {
         didSet {
             items.forEach({ $0.size = itemSize })
         }
     }
-    var itemsInterSpacing: CGFloat = 10.0
-    var animationDuration: TimeInterval = 0.6
-    var transitionType: UPActionButtonTransitionType = .none
-    var image: UIImage? {
+    public var itemsInterSpacing: CGFloat = 10.0
+    public var animationDuration: TimeInterval = 0.6
+    public var transitionType: UPActionButtonTransitionType = .none
+    public var image: UIImage? {
         get { return openTitleImageView.image }
         set {
             openTitleImageView.image = newValue
@@ -90,7 +90,7 @@ class UPActionButton: UIView {
             openTitleLabel.isHidden = true
         }
     }
-    var title: String? {
+    public var title: String? {
         get { return openTitleLabel.text }
         set {
             openTitleLabel.text = newValue
@@ -99,29 +99,29 @@ class UPActionButton: UIView {
             openTitleImageView.isHidden = true
         }
     }
-    var titleColor: UIColor {
+    public var titleColor: UIColor {
         get { return openTitleLabel.textColor }
         set {
             openTitleLabel.textColor = newValue
             closedTitleLabel.textColor = newValue
         }
     }
-    var font: UIFont {
+    public var font: UIFont {
         get { return openTitleLabel.font }
         set {
             openTitleLabel.font = newValue
             closedTitleLabel.font = newValue
         }
     }
-    var color: UIColor? {
+    public var color: UIColor? {
         get { return button.backgroundColor }
         set { button.backgroundColor = newValue }
     }
-    var cornerRadius: CGFloat {
+    public var cornerRadius: CGFloat {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
     }
-    var overlayColor: UIColor? {
+    public var overlayColor: UIColor? {
         get { return backgroundView.backgroundColor }
         set { backgroundView.backgroundColor = newValue }
     }
@@ -178,7 +178,7 @@ class UPActionButton: UIView {
         }
     }
     
-    override func willMove(toSuperview newSuperview: UIView?) {
+    override open func willMove(toSuperview newSuperview: UIView?) {
         if let superview = newSuperview {
             superview.addObserver(self, forKeyPath: superviewBoundsKeyPath, options: .new, context: nil)
             observesSuperviewBounds = true
@@ -190,7 +190,7 @@ class UPActionButton: UIView {
         super.willMove(toSuperview: newSuperview)
     }
     
-    required init?(coder aDecoder: NSCoder) {
+    required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
@@ -213,26 +213,26 @@ extension UPActionButton {
     
     /* Items management */
     
-    func add(item: UPActionButtonItem) {
+    open func add(item: UPActionButtonItem) {
         add(item: item, computeSize: true)
     }
     
-    func add(items: [UPActionButtonItem]) {
+    open func add(items: [UPActionButtonItem]) {
         items.forEach({ self.add(item: $0, computeSize: false) })
         computeOpenSize()
     }
     
-    func remove(item: UPActionButtonItem) {
+    open func remove(item: UPActionButtonItem) {
         remove(item: item, computeSize: true)
     }
     
-    func remove(itemAt index: Int) {
+    open func remove(itemAt index: Int) {
         guard index >= 0 && index < items.count else { return }
         
         remove(item: items[index], computeSize: true)
     }
     
-    func removeAllItems() {
+    open func removeAllItems() {
         items.forEach({ self.remove(item: $0, computeSize: false) })
         computeOpenSize()
     }
@@ -240,7 +240,7 @@ extension UPActionButton {
     
     /* Interactions */
     
-    func toggle() {
+    open func toggle() {
         if isOpen {
             close()
         } else {
@@ -248,7 +248,7 @@ extension UPActionButton {
         }
     }
     
-    func open() {
+    open func open() {
         guard let superFrame = self.superview?.frame else { return }
         guard !isOpen && !isAnimating else { return }
         
@@ -262,7 +262,7 @@ extension UPActionButton {
         transitionButtonTitle()
     }
     
-    func close() {
+    open func close() {
         guard isOpen && !isAnimating else { return }
         
         delegate?.actionButtonWillClose?(self)
@@ -277,7 +277,7 @@ extension UPActionButton {
     
     /* Customization */
     
-    func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
+    open func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
         button.layer.shadowColor = color.cgColor
         button.layer.shadowOpacity = opacity
         button.layer.shadowRadius = radius
@@ -286,7 +286,7 @@ extension UPActionButton {
     
     /* Observers */
     
-    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+    override open func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
         if keyPath == superviewBoundsKeyPath {
             guard let superview = self.superview, isOpen else { return }
             
@@ -305,7 +305,7 @@ extension UPActionButton {
 // MARK: - UPActionButtonItem Delegate Methods
 extension UPActionButton: UPActionButtonItemDelegate {
     
-    func didTouch(item: UPActionButtonItem) {
+    public func didTouch(item: UPActionButtonItem) {
         guard item.closeOnTap else { return }
         self.close()
     }
@@ -315,7 +315,7 @@ extension UPActionButton: UPActionButtonItemDelegate {
 
 // MARK: - Private Helpers
 extension UPActionButton: CAAnimationDelegate {
-
+    
     /* Items Management */
     
     fileprivate func add(item: UPActionButtonItem, computeSize compute: Bool) {
@@ -470,8 +470,8 @@ extension UPActionButton: CAAnimationDelegate {
         
         item.center = center
     }
-
-    func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
+    
+    public func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
         animatedItemTag += 1
         guard animatedItemTag >= items.count else { return }
         
@@ -487,7 +487,7 @@ extension UPActionButton: CAAnimationDelegate {
         isAnimating = false
     }
     
-    func transitionButtonTitle() {
+    fileprivate func transitionButtonTitle() {
         let duration = animationDuration / 2.0
         let opening = !isOpen
         
