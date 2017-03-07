@@ -45,15 +45,32 @@ class UPActionButton: UIView {
 
     fileprivate var containerOpenSize: CGSize = .zero
     fileprivate var baseButtonOpenCenter: CGPoint = .zero
-    fileprivate var isOpen = false
     fileprivate var isAnimating = false
     fileprivate var animatedItemTag: Int = 0
+    
     fileprivate let superviewBoundsKeyPath = "layer.bounds"
     fileprivate var observesSuperviewBounds = false
+    fileprivate let scrollviewScrollKeyPath = "contentOffset"
+    fileprivate var observesScrollview = false
     
     fileprivate(set) var items = [UPActionButtonItem]()
     
     weak var delegate: UPActionButtonDelegate?
+    
+    var observedScrollView: UIScrollView? {
+        didSet {
+            if let scrollView = oldValue, observesScrollview {
+                scrollView.removeObserver(self, forKeyPath: scrollviewScrollKeyPath)
+                observesScrollview = false
+            }
+            if let scrollView = observedScrollView {
+                scrollView.addObserver(self, forKeyPath: scrollviewScrollKeyPath, options: .new, context: nil)
+                observesScrollview = true
+            }
+        }
+    }
+    
+    var isOpen = false
     
     /* Customization */
     var itemSize: CGSize = CGSize(width: 30, height: 30) {
@@ -104,6 +121,10 @@ class UPActionButton: UIView {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
     }
+    var overlayColor: UIColor? {
+        get { return backgroundView.backgroundColor }
+        set { backgroundView.backgroundColor = newValue }
+    }
     
     
     // MARK: - Initialization
@@ -113,14 +134,14 @@ class UPActionButton: UIView {
         let innerFrame = CGRect(origin: .zero, size: frame.size)
         
         backgroundView = UIView(frame: innerFrame)
-        backgroundView.backgroundColor = UIColor(white: 1.0, alpha: 0.4)
         backgroundView.isHidden = true
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(toggle))
         backgroundView.addGestureRecognizer(tapGesture)
+        self.overlayColor = UIColor(white: 1.0, alpha: 0.4)
         self.addSubview(backgroundView)
         
         containerView = UIView(frame: innerFrame)
-//        containerView.clipsToBounds = true
+        //        containerView.clipsToBounds = true
         self.addSubview(containerView)
         
         button = UIButton(type: .custom)
@@ -165,6 +186,8 @@ class UPActionButton: UIView {
             superview.removeObserver(self, forKeyPath: superviewBoundsKeyPath)
             observesSuperviewBounds = false
         }
+        
+        super.willMove(toSuperview: newSuperview)
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -175,6 +198,10 @@ class UPActionButton: UIView {
         if let superview = self.superview, observesSuperviewBounds {
             superview.removeObserver(self, forKeyPath: superviewBoundsKeyPath)
             observesSuperviewBounds = false
+        }
+        if let scrollView = observedScrollView, observesScrollview {
+            scrollView.removeObserver(self, forKeyPath: scrollviewScrollKeyPath)
+            observesScrollview = false
         }
     }
     
@@ -228,7 +255,6 @@ extension UPActionButton {
         delegate?.actionButtonWillOpen?(self)
         
         isAnimating = true
-        isOpen = true
         animatedItemTag = 0
         
         expandContainers(to: superFrame)
@@ -242,7 +268,6 @@ extension UPActionButton {
         delegate?.actionButtonWillClose?(self)
         
         isAnimating = true
-        isOpen = false
         animatedItemTag = 0
         
         reduceItems()
@@ -268,6 +293,9 @@ extension UPActionButton {
             let superFrame = CGRect(origin: .zero, size: superview.frame.size)
             self.frame = superFrame
             backgroundView.frame = superFrame
+        }
+        else if keyPath == scrollviewScrollKeyPath {
+            print(observedScrollView?.contentOffset)
         }
     }
 }
@@ -441,11 +469,12 @@ extension UPActionButton: CAAnimationDelegate {
         
         item.center = center
     }
- 
+
     func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
         animatedItemTag += 1
         guard animatedItemTag >= items.count else { return }
         
+        isOpen = !isOpen
         if isOpen {
             delegate?.actionButtonDidOpen?(self)
         }
@@ -459,41 +488,43 @@ extension UPActionButton: CAAnimationDelegate {
     
     func transitionButtonTitle() {
         let duration = animationDuration / 2.0
+        let opening = !isOpen
+        
         switch transitionType {
         case .none: break
             
         case .rotate(let angle):
             guard let titleView = self.visibleOpenTitleView else { return }
             UIView.animate(withDuration: duration, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 5.0, options: .curveEaseInOut, animations: {
-                    titleView.transform = self.isOpen ? CGAffineTransform(rotationAngle: angle) : CGAffineTransform.identity
+                titleView.transform = opening ? CGAffineTransform(rotationAngle: angle) : CGAffineTransform.identity
             }, completion: nil)
             
         case .crossDissolveText(let title):
-            if isOpen {
+            if opening {
                 closedTitleLabel.text = title
             }
             closedTitleLabel.isHidden = false
             visibleOpenTitleView?.isHidden = false
             UIView.animate(withDuration: duration, animations: {
-                self.visibleOpenTitleView?.alpha = self.isOpen ? 0.0 : 1.0
-                self.closedTitleLabel.alpha = self.isOpen ? 1.0 : 0.0
+                self.visibleOpenTitleView?.alpha = opening ? 0.0 : 1.0
+                self.closedTitleLabel.alpha = opening ? 1.0 : 0.0
             }, completion: { (finished: Bool) in
-                self.visibleOpenTitleView?.isHidden = self.isOpen
-                self.closedTitleLabel.isHidden = !self.isOpen
+                self.visibleOpenTitleView?.isHidden = opening
+                self.closedTitleLabel.isHidden = !opening
             })
             
         case .crossDissolveImage(let image):
-            if isOpen {
+            if opening {
                 closedTitleImageView.image = image
             }
             closedTitleImageView.isHidden = false
             visibleOpenTitleView?.isHidden = false
             UIView.animate(withDuration: duration, animations: {
-                self.visibleOpenTitleView?.alpha = self.isOpen ? 0.0 : 1.0
-                self.closedTitleImageView.alpha = self.isOpen ? 1.0 : 0.0
+                self.visibleOpenTitleView?.alpha = opening ? 0.0 : 1.0
+                self.closedTitleImageView.alpha = opening ? 1.0 : 0.0
             }, completion: { (finished: Bool) in
-                self.visibleOpenTitleView?.isHidden = self.isOpen
-                self.closedTitleImageView.isHidden = !self.isOpen
+                self.visibleOpenTitleView?.isHidden = opening
+                self.closedTitleImageView.isHidden = !opening
             })
         }
     }
