@@ -14,6 +14,12 @@ public protocol UPActionButtonItemDelegate {
 }
 
 
+public enum UPActionButtonItemTitlePosition {
+    case left
+    case right
+}
+
+
 open class UPActionButtonItem: UIView {
     
     // MARK: - Properties
@@ -42,11 +48,10 @@ open class UPActionButtonItem: UIView {
             self.frame = frame
             
             titleLabel.frame = CGRect(origin: .zero, size: titleSize)
-            titleLabel.center = CGPoint(x: titleSize.width/2.0, y: frame.size.height/2.0)
-            
             button.frame = CGRect(origin: .zero, size: size)
-            button.center = CGPoint(x: frame.size.width - size.width/2.0, y: frame.size.height/2.0)
             button.layer.cornerRadius = min(size.width, size.height) / 2.0
+            
+            layoutElements()
         }
     }
     
@@ -58,6 +63,11 @@ open class UPActionButtonItem: UIView {
     public var delegate: UPActionButtonItemDelegate?
     
     /* Customization */
+    public var titlePosition: UPActionButtonItemTitlePosition = .left {
+        didSet {
+            layoutElements()
+        }
+    }
     public var internMargin: CGFloat = 5.0
     public var closeOnTap: Bool = true
     public var titleColor: UIColor {
@@ -127,7 +137,12 @@ extension UPActionButtonItem {
         
         let operations = {
             var titleFrame = self.titleLabel.frame
-            titleFrame.origin.x = 0
+            switch self.titlePosition {
+            case .left:
+                titleFrame.origin.x = 0
+            case .right:
+                titleFrame.origin.x = self.button.frame.size.width + self.internMargin
+            }
             titleFrame.size.width = self.titleLabelSize.width
             self.titleLabel.frame = titleFrame
             self.titleLabel.alpha = 1.0
@@ -199,4 +214,26 @@ extension UPActionButtonItem {
             button.isHighlighted = tapButton.isHighlighted
         }
     }
+}
+
+
+// MARK: - Private Helpers
+extension UPActionButtonItem {
+
+    /* Interactions */
+    
+    fileprivate func layoutElements() {
+        let titleSize = titleLabel.frame.size
+        let buttonSize = button.frame.size
+        
+        switch titlePosition {
+        case .left:
+            titleLabel.center = CGPoint(x: titleSize.width/2.0, y: self.frame.size.height/2.0)
+            button.center = CGPoint(x: self.frame.size.width - buttonSize.width/2.0, y: self.frame.size.height/2.0)
+        case .right:
+            button.center = CGPoint(x: buttonSize.width/2.0, y: self.frame.size.height/2.0)
+            titleLabel.center = CGPoint(x: self.frame.size.width - titleSize.width/2.0, y: self.frame.size.height/2.0)
+        }
+    }
+
 }

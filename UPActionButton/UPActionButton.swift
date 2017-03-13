@@ -351,17 +351,26 @@ extension UPActionButton: CAAnimationDelegate {
         let center = CGPoint(x: button.frame.size.width / 2.0, y: button.frame.size.height / 2.0)
         var height: CGFloat = button.frame.size.height
         var leftOffset: CGFloat = 0
+        var rightOffset: CGFloat = 0
         
         items.forEach { (item: UPActionButtonItem) in
             height += item.frame.size.height + self.itemsInterSpacing
-            let itemLeftOffset = CGFloat(fabs(center.x - item.itemCenter.x))
-            leftOffset = max(leftOffset, itemLeftOffset)
+            
+            switch item.titlePosition {
+            case .left:
+                let itemLeftOffset = CGFloat(fabs(center.x - item.itemCenter.x))
+                leftOffset = max(leftOffset, itemLeftOffset)
+            case .right:
+                let itemRightOffset = CGFloat(fabs(item.frame.size.width - item.itemCenter.x - center.x))
+                rightOffset = max(rightOffset, itemRightOffset)
+            }
+            
         }
         
         if items.count > 0 {
             height += itemsInterSpacing
         }
-        let width: CGFloat = leftOffset + button.frame.size.width
+        let width: CGFloat = leftOffset + button.frame.size.width + rightOffset
         
         containerOpenSize = CGSize(width: width, height: height)
         let baseButtonCenterY: CGFloat = height - button.frame.size.height / 2.0

@@ -32,6 +32,7 @@ class ViewController: UIViewController {
         let item2 = UPActionButtonItem(title: "Item 2 next one", buttonImage: nil, buttonText: "😉") {
             print("Item 2 tapped")
         }
+        item2.titlePosition = .right
         let item3 = UPActionButtonItem(title: "Item 3 the", buttonImage: nil, buttonText: "🐦") {
             print("Item 3 tapped")
         }
