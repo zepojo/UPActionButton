@@ -16,6 +16,11 @@ import UIKit
     @objc optional func actionButtonDidClose(_: UPActionButton)
 }
 
+public enum UPActionButtonItemsPosition {
+    case up
+    case down
+}
+
 public enum UPActionButtonTransitionType {
     case none
     case rotate(CGFloat)
@@ -44,7 +49,7 @@ open class UPActionButton: UIView {
     }
     
     fileprivate var containerOpenSize: CGSize = .zero
-    fileprivate var baseButtonOpenCenter: CGPoint = .zero
+    fileprivate var buttonOpenCenter: CGPoint = .zero
     fileprivate var isAnimating = false
     fileprivate var animatedItemTag: Int = 0
     
@@ -73,6 +78,11 @@ open class UPActionButton: UIView {
     public var isOpen = false
     
     /* Customization */
+    public var itemsPosition: UPActionButtonItemsPosition = .up {
+        didSet {
+            computeOpenSize()
+        }
+    }
     public var itemSize: CGSize = CGSize(width: 30, height: 30) {
         didSet {
             items.forEach({ $0.size = itemSize })
@@ -373,8 +383,16 @@ extension UPActionButton: CAAnimationDelegate {
         let width: CGFloat = leftOffset + button.frame.size.width + rightOffset
         
         containerOpenSize = CGSize(width: width, height: height)
-        let baseButtonCenterY: CGFloat = height - button.frame.size.height / 2.0
-        baseButtonOpenCenter = CGPoint(x: leftOffset + button.frame.size.width / 2.0, y: baseButtonCenterY)
+        var baseButtonCenterY: CGFloat = 0
+        
+        switch itemsPosition {
+        case .up:
+            baseButtonCenterY = containerOpenSize.height - button.frame.size.height / 2.0
+        case .down:
+            baseButtonCenterY = button.frame.size.height / 2.0
+        }
+        
+        buttonOpenCenter = CGPoint(x: leftOffset + button.frame.size.width / 2.0, y: baseButtonCenterY)
     }
     
     fileprivate func expandContainers(to: CGRect) {
@@ -389,12 +407,14 @@ extension UPActionButton: CAAnimationDelegate {
         var containerFrame = containerView.frame
         containerFrame.origin = origin
         containerFrame.size = containerOpenSize
-        containerFrame.origin.x -= baseButtonOpenCenter.x - button.frame.size.width / 2.0
-        let yOffset: CGFloat = baseButtonOpenCenter.y - button.frame.size.height / 2.0
-        containerFrame.origin.y -= yOffset
+        containerFrame.origin.x -= buttonOpenCenter.x - button.frame.size.width / 2.0
+        if case .up = itemsPosition {
+            let yOffset: CGFloat = buttonOpenCenter.y - button.frame.size.height / 2.0
+            containerFrame.origin.y -= yOffset
+        }
         containerView.frame = containerFrame
         
-        button.center = baseButtonOpenCenter
+        button.center = buttonOpenCenter
         
         items.forEach({ $0.itemCenter = button.center })
     }
@@ -404,19 +424,24 @@ extension UPActionButton: CAAnimationDelegate {
             self.backgroundView.alpha = 1.0
         }
         
+        var way: CGFloat = -1
         var y = button.frame.origin.y - itemsInterSpacing
+        if case .down = itemsPosition {
+            way = 1
+            y = button.frame.origin.y + button.frame.size.height + itemsInterSpacing
+        }
         for (index, item) in self.items.enumerated() {
             //            let duration = Double(index+1) * animationDuration / Double(items.count)
             let duration = Double(items.count - index) * animationDuration / Double(items.count)
             
-            let center = CGPoint(x: button.center.x, y: y + (item.frame.size.height / 2.0 * -1))
+            let center = CGPoint(x: button.center.x, y: y + (item.frame.size.height / 2.0 * way))
             let normalizedCenter = item.centerForItemCenter(center)
             
             // TODO: delay
             move(item: item, to: normalizedCenter, duration: duration, opening: true, bouncing: true)
             item.expand(animated: true, duration: duration)
             
-            y += (item.frame.size.height + itemsInterSpacing) * -1
+            y += (item.frame.size.height + itemsInterSpacing) * way
         }
     }
     
@@ -461,7 +486,10 @@ extension UPActionButton: CAAnimationDelegate {
         let path = CGMutablePath()
         path.move(to: item.center)
         if bouncing {
-            let bouncingOffset: CGFloat = itemsInterSpacing * -1
+            var bouncingOffset: CGFloat = itemsInterSpacing
+            if case .up = itemsPosition {
+                bouncingOffset *= -1
+            }
             if opening {
                 path.addLine(to: CGPoint(x: center.x, y: center.y + bouncingOffset))
                 path.addLine(to: CGPoint(x: center.x, y: center.y - (bouncingOffset / 2.0)))
