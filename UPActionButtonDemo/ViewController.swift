@@ -25,6 +25,7 @@ class ViewController: UIViewController {
         ab.color = UIColor.blue
         ab.cornerRadius = 25.0
         ab.setShadow(color: .black, opacity: 0.5, radius: 3.0, offset: CGSize(width: 0, height: 2))
+        ab.showAnimationType = .scaleUp
         
         let item = UPActionButtonItem(title: "Item", buttonImage: nil, buttonText: "👼") {
             print("Item tapped")
@@ -45,7 +46,12 @@ class ViewController: UIViewController {
         ab.add(item: item2)
         ab.add(item: item3)
         
+        ab.hide(animated: false)
         view.addSubview(ab)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            ab.show()
+        }
     }
 
 }

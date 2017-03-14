@@ -28,6 +28,16 @@ public enum UPActionButtonTransitionType {
     case crossDissolveText(String)
 }
 
+public enum UPActionButtonDisplayAnimationType {
+    case none
+    case slideUp
+    case slideDown
+    case slideLeft
+    case slideRight
+    case scaleUp
+    case scaleDown
+}
+
 open class UPActionButton: UIView {
     
     // MARK: - Properties
@@ -91,6 +101,8 @@ open class UPActionButton: UIView {
     public var itemsInterSpacing: CGFloat = 10.0
     public var animationDuration: TimeInterval = 0.6
     public var transitionType: UPActionButtonTransitionType = .none
+    public var showAnimationType: UPActionButtonDisplayAnimationType = .none
+    public var hideAnimationType: UPActionButtonDisplayAnimationType = .none
     public var image: UIImage? {
         get { return openTitleImageView.image }
         set {
@@ -285,6 +297,45 @@ extension UPActionButton {
     }
     
     
+    /* Display */
+    
+    open func show(animated: Bool = true) {
+        guard isHidden else { return }
+        
+        if showAnimationType == .none || !animated {
+            self.isHidden = false
+            return
+        }
+        
+        let animation = appearAnimations(type: showAnimationType)
+        
+        animation.preparation?()
+        UIView.animate(withDuration: 0.3, delay: 0.0, options: .curveEaseInOut, animations: {
+            animation.animation?()
+        }) { (finished: Bool) in
+            animation.completion?()
+        }
+    }
+    
+    open func hide(animated: Bool = true) {
+        guard !isHidden else { return }
+        
+        if showAnimationType == .none || !animated {
+            self.isHidden = true
+            return
+        }
+        
+        let animation = disappearAnimations(type: hideAnimationType)
+        
+        animation.preparation?()
+        UIView.animate(withDuration: 0.3, delay: 0.0, options: .curveEaseInOut, animations: {
+            animation.animation?()
+        }) { (finished: Bool) in
+            animation.completion?()
+        }
+    }
+    
+    
     /* Customization */
     
     open func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
@@ -408,7 +459,7 @@ extension UPActionButton: CAAnimationDelegate {
         containerFrame.origin = origin
         containerFrame.size = containerOpenSize
         containerFrame.origin.x -= buttonOpenCenter.x - button.frame.size.width / 2.0
-        if case .up = itemsPosition {
+        if itemsPosition == .up {
             let yOffset: CGFloat = buttonOpenCenter.y - button.frame.size.height / 2.0
             containerFrame.origin.y -= yOffset
         }
@@ -426,7 +477,7 @@ extension UPActionButton: CAAnimationDelegate {
         
         var way: CGFloat = -1
         var y = button.frame.origin.y - itemsInterSpacing
-        if case .down = itemsPosition {
+        if itemsPosition == .down {
             way = 1
             y = button.frame.origin.y + button.frame.size.height + itemsInterSpacing
         }
@@ -487,7 +538,7 @@ extension UPActionButton: CAAnimationDelegate {
         path.move(to: item.center)
         if bouncing {
             var bouncingOffset: CGFloat = itemsInterSpacing
-            if case .up = itemsPosition {
+            if itemsPosition == .up {
                 bouncingOffset *= -1
             }
             if opening {
@@ -565,5 +616,80 @@ extension UPActionButton: CAAnimationDelegate {
                 self.closedTitleImageView.isHidden = !opening
             })
         }
+    }
+    
+    fileprivate func appearAnimations(type: UPActionButtonDisplayAnimationType) -> (preparation: (() -> Void)?, animation: (() -> Void)?, completion: (() -> Void)?) {
+        
+        let initialContainerFrame = containerView.frame
+        let translationOffset: CGFloat = 20.0
+        let scaleOffset: CGFloat = 0.5
+        
+        return (preparation: {
+            var containerFrame = self.containerView.frame
+            switch type {
+            case .none: break
+            case .slideDown:
+                containerFrame.origin.y -= translationOffset
+                self.containerView.frame = containerFrame
+            case .slideUp:
+                containerFrame.origin.y += translationOffset
+                self.containerView.frame = containerFrame
+            case .slideLeft:
+                containerFrame.origin.x += translationOffset
+                self.containerView.frame = containerFrame
+            case .slideRight:
+                containerFrame.origin.x -= translationOffset
+                self.containerView.frame = containerFrame
+            case .scaleDown:
+                self.containerView.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
+            case .scaleUp:
+                self.containerView.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
+            }
+            
+            self.isHidden = false
+            self.containerView.alpha = 0.0
+        }, animation: {
+            self.containerView.transform = CGAffineTransform.identity
+            self.containerView.frame = initialContainerFrame
+            self.containerView.alpha = 1.0
+        }, completion: nil)
+    }
+    
+    fileprivate func disappearAnimations(type: UPActionButtonDisplayAnimationType) -> (preparation: (() -> Void)?, animation: (() -> Void)?, completion: (() -> Void)?) {
+        
+        let initialContainerFrame = containerView.frame
+        let translationOffset: CGFloat = 20.0
+        let scaleOffset: CGFloat = 0.5
+        
+        return (preparation: {
+            self.containerView.alpha = 1.0
+        }, animation: {
+            var containerFrame = self.containerView.frame
+            switch type {
+            case .none: break
+            case .slideDown:
+                containerFrame.origin.y += translationOffset
+                self.containerView.frame = containerFrame
+            case .slideUp:
+                containerFrame.origin.y -= translationOffset
+                self.containerView.frame = containerFrame
+            case .slideLeft:
+                containerFrame.origin.x -= translationOffset
+                self.containerView.frame = containerFrame
+            case .slideRight:
+                containerFrame.origin.x += translationOffset
+                self.containerView.frame = containerFrame
+            case .scaleDown:
+                self.containerView.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
+            case .scaleUp:
+                self.containerView.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
+            }
+            
+            self.containerView.alpha = 0.0
+        }, completion: {
+            self.isHidden = true
+            self.containerView.transform = CGAffineTransform.identity
+            self.containerView.frame = initialContainerFrame
+        })
     }
 }
