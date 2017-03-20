@@ -8,51 +8,95 @@
 
 import UIKit
 
-class ViewController: UIViewController {
+class ViewController: UITableViewController {
+    
+    var rowCount = 30
+    var actionButton: UPActionButton!
 
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        self.view.backgroundColor = UIColor.white
-        createActionButton()
+        self.title = "Action Button"
+        
+        actionButton = createActionButton()
     }
     
-    fileprivate func createActionButton() {
-        let ab = UPActionButton(frame: CGRect(x: 200, y: 200, width: 50, height: 50), image: nil, title: "+")
-        ab.transitionType = .rotate(2.35)
-        ab.titleColor = UIColor.white
-        ab.font = UIFont.systemFont(ofSize: 32)
-        ab.color = UIColor.blue
-        ab.cornerRadius = 25.0
-        ab.setShadow(color: .black, opacity: 0.5, radius: 3.0, offset: CGSize(width: 0, height: 2))
-        ab.showAnimationType = .scaleUp
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
         
-        let item = UPActionButtonItem(title: "Item", buttonImage: nil, buttonText: "👼") {
-            print("Item tapped")
+        var buttonFrame = actionButton.frame
+        buttonFrame.origin.x = self.view.frame.size.width - buttonFrame.size.width - 20
+        buttonFrame.origin.y = self.view.frame.size.height - buttonFrame.size.height - 20
+        actionButton.frame = buttonFrame
+        tableView.addSubview(actionButton)
+    }
+    
+    fileprivate func createActionButton() -> UPActionButton {
+        let button = UPActionButton(frame: CGRect(x: 200, y: 200, width: 60, height: 60), image: nil, title: "+")
+        button.transitionType = .rotate(2.35)
+        button.titleColor = UIColor.white
+        button.font = UIFont.systemFont(ofSize: 40)
+        button.color = UIColor.blue
+        button.cornerRadius = 30.0
+        button.setShadow(color: .black, opacity: 0.5, radius: 3.0, offset: CGSize(width: 0, height: 2))
+        button.showAnimationType = .scaleUp
+        button.overlayColor = UIColor(white: 0.0, alpha: 0.3)
+        button.itemSize = CGSize(width: 40, height: 40)
+        button.floating = true
+        button.observedScrollView = self.tableView
+        
+        var items = [UPActionButtonItem]()
+        
+        let firstItem = UPActionButtonItem(title: "Add 1 row", buttonImage: nil, buttonText: "1") {
+            self.addRows(1)
         }
-        let item2 = UPActionButtonItem(title: "Item 2 next one", buttonImage: nil, buttonText: "😉") {
-            print("Item 2 tapped")
+        items.append(firstItem)
+        
+        let secondItem = UPActionButtonItem(title: "Add 5 rows", buttonImage: nil, buttonText: "5") {
+            self.addRows(5)
         }
-        item2.titlePosition = .right
-        let item3 = UPActionButtonItem(title: "Item 3 the", buttonImage: nil, buttonText: "🐦") {
-            print("Item 3 tapped")
+        items.append(secondItem)
+        
+        let thirdItem = UPActionButtonItem(title: "Add 10 rows", buttonImage: nil, buttonText: "10") {
+            self.addRows(10)
         }
-        [item, item2, item3].forEach { (item: UPActionButtonItem) in
-            item.cornerRadius = 15.0
+        items.append(thirdItem)
+        
+        items.forEach { (item: UPActionButtonItem) in
+            item.cornerRadius = 20.0
             item.color = UIColor.blue
             item.titleColor = UIColor.black
         }
-        ab.add(item: item)
-        ab.add(item: item2)
-        ab.add(item: item3)
         
-        ab.hide(animated: false)
-        view.addSubview(ab)
+        button.add(items: items)
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            ab.show()
-        }
+        return button
+    }
+    
+    fileprivate func addRows(_ rows: Int) {
+        rowCount += rows
+        self.tableView.reloadData()
     }
 
+}
+
+
+// MARK: - UITableView Delegate / DataSource
+extension ViewController {
+    
+    override func numberOfSections(in tableView: UITableView) -> Int {
+        return 1
+    }
+    
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return rowCount
+    }
+    
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "UPActionButtonDemoCell", for: indexPath)
+        cell.textLabel?.text = "Cell \(indexPath.row)"
+        return cell
+    }
+    
 }
 

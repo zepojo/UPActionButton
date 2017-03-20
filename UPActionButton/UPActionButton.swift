@@ -65,7 +65,7 @@ open class UPActionButton: UIView {
     
     fileprivate let superviewBoundsKeyPath = "layer.bounds"
     fileprivate var observesSuperviewBounds = false
-    fileprivate let scrollviewScrollKeyPath = "contentOffset"
+    fileprivate var observesSuperviewContentOffset = false
     fileprivate var observesScrollview = false
     
     fileprivate(set) var items = [UPActionButtonItem]()
@@ -75,11 +75,11 @@ open class UPActionButton: UIView {
     public var observedScrollView: UIScrollView? {
         didSet {
             if let scrollView = oldValue, observesScrollview {
-                scrollView.removeObserver(self, forKeyPath: scrollviewScrollKeyPath)
+                scrollView.removeObserver(self, forKeyPath: "contentOffset")
                 observesScrollview = false
             }
             if let scrollView = observedScrollView {
-                scrollView.addObserver(self, forKeyPath: scrollviewScrollKeyPath, options: .new, context: nil)
+                scrollView.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
                 observesScrollview = true
             }
         }
@@ -88,6 +88,18 @@ open class UPActionButton: UIView {
     public var isOpen = false
     
     /* Customization */
+    public var floating: Bool = false {
+        didSet {
+            if !floating && observesSuperviewContentOffset {
+                self.superview?.removeObserver(self, forKeyPath: "contentOffset")
+                observesSuperviewContentOffset = false
+            }
+            if let superview = self.superview as? UIScrollView, floating {
+                superview.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
+                observesSuperviewContentOffset = true
+            }
+        }
+    }
     public var itemsPosition: UPActionButtonItemsPosition = .up {
         didSet {
             computeOpenSize()
@@ -201,15 +213,31 @@ open class UPActionButton: UIView {
     }
     
     override open func willMove(toSuperview newSuperview: UIView?) {
-        if let superview = newSuperview {
-            superview.addObserver(self, forKeyPath: superviewBoundsKeyPath, options: .new, context: nil)
-            observesSuperviewBounds = true
-        } else if let superview = self.superview, observesSuperviewBounds {
-            superview.removeObserver(self, forKeyPath: superviewBoundsKeyPath)
-            observesSuperviewBounds = false
+        if let superview = self.superview {
+            if observesSuperviewBounds {
+                superview.removeObserver(self, forKeyPath: superviewBoundsKeyPath)
+                observesSuperviewBounds = false
+            }
+            if observesSuperviewContentOffset {
+                superview.removeObserver(self, forKeyPath: "contentOffset")
+                observesSuperviewContentOffset = false
+            }
         }
         
         super.willMove(toSuperview: newSuperview)
+    }
+    
+    override open func didMoveToSuperview() {
+        if let superview = self.superview {
+            superview.addObserver(self, forKeyPath: superviewBoundsKeyPath, options: .new, context: nil)
+            observesSuperviewBounds = true
+            if (floating && superview is UIScrollView) {
+                superview.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
+                observesSuperviewContentOffset = true
+            }
+        }
+        
+        super.didMoveToSuperview()
     }
     
     required public init?(coder aDecoder: NSCoder) {
@@ -217,12 +245,18 @@ open class UPActionButton: UIView {
     }
     
     deinit {
-        if let superview = self.superview, observesSuperviewBounds {
-            superview.removeObserver(self, forKeyPath: superviewBoundsKeyPath)
-            observesSuperviewBounds = false
+        if let superview = self.superview {
+            if observesSuperviewBounds {
+                superview.removeObserver(self, forKeyPath: superviewBoundsKeyPath)
+                observesSuperviewBounds = false
+            }
+            if observesSuperviewContentOffset {
+                superview.removeObserver(self, forKeyPath: "contentOffset")
+                observesSuperviewContentOffset = false
+            }
         }
         if let scrollView = observedScrollView, observesScrollview {
-            scrollView.removeObserver(self, forKeyPath: scrollviewScrollKeyPath)
+            scrollView.removeObserver(self, forKeyPath: "contentOffset")
             observesScrollview = false
         }
     }
@@ -271,7 +305,6 @@ extension UPActionButton {
     }
     
     open func open() {
-        guard let superFrame = self.superview?.frame else { return }
         guard !isOpen && !isAnimating else { return }
         
         delegate?.actionButtonWillOpen?(self)
@@ -279,7 +312,7 @@ extension UPActionButton {
         isAnimating = true
         animatedItemTag = 0
         
-        expandContainers(to: superFrame)
+        expandContainers()
         expandItems()
         transitionButtonTitle()
     }
@@ -348,16 +381,23 @@ extension UPActionButton {
     /* Observers */
     
     override open func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        if keyPath == superviewBoundsKeyPath {
+        if (object as? UIView) == superview && keyPath == superviewBoundsKeyPath {
             guard let superview = self.superview, isOpen else { return }
             
             let superFrame = CGRect(origin: .zero, size: superview.frame.size)
             self.frame = superFrame
             backgroundView.frame = superFrame
         }
-        else if keyPath == scrollviewScrollKeyPath {
+        else if (object as? UIScrollView) == superview && keyPath == "contentOffset" && floating {
+            guard let scrollView = observedScrollView else { return }
+            
+            let margin: CGFloat = isOpen ? 0 : 20
+            var frame = self.frame
+            frame.origin.y = scrollView.frame.size.height - frame.size.height - margin + scrollView.contentOffset.y
+            self.frame = frame
+        }
+        else if (object as? UIScrollView) == observedScrollView && keyPath == "contentOffset" {
             // TODO
-            //print(observedScrollView?.contentOffset)
         }
     }
 }
@@ -446,17 +486,22 @@ extension UPActionButton: CAAnimationDelegate {
         buttonOpenCenter = CGPoint(x: leftOffset + button.frame.size.width / 2.0, y: baseButtonCenterY)
     }
     
-    fileprivate func expandContainers(to: CGRect) {
+    fileprivate func expandContainers() {
         let origin = self.frame.origin
         
-        let superFrame = CGRect(origin: .zero, size: to.size)
+        var superOrigin: CGPoint = .zero
+        if let superScrollview = self.superview as? UIScrollView {
+            superOrigin = superScrollview.contentOffset
+        }
+        let superSize: CGSize = superview?.frame.size ?? .zero
+        let superFrame = CGRect(origin: superOrigin, size: superSize)
         self.frame = superFrame
-        backgroundView.frame = superFrame
+        backgroundView.frame = CGRect(origin: .zero, size: superSize)
         backgroundView.alpha = 0.0
         backgroundView.isHidden = false
         
         var containerFrame = containerView.frame
-        containerFrame.origin = origin
+        containerFrame.origin = CGPoint(x: origin.x - superOrigin.x, y: origin.y - superOrigin.y)
         containerFrame.size = containerOpenSize
         containerFrame.origin.x -= buttonOpenCenter.x - button.frame.size.width / 2.0
         if itemsPosition == .up {
@@ -497,7 +542,8 @@ extension UPActionButton: CAAnimationDelegate {
     }
     
     fileprivate func reduceContainers() {
-        let baseOrigin = containerView.convert(button.frame.origin, to: self)
+        let superview = self.superview ?? self
+        let baseOrigin = containerView.convert(button.frame.origin, to: superview)
         let baseSize = button.frame.size
         let frame = CGRect(origin: baseOrigin, size: baseSize)
         let innerFrame = CGRect(origin: CGPoint(x: 0, y: 0), size: baseSize)
