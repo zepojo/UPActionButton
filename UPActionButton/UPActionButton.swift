@@ -40,6 +40,10 @@ public enum UPActionButtonDisplayAnimationType {
 
 open class UPActionButton: UIView {
     
+    fileprivate enum ScrollDirection {
+        case none, up, down
+    }
+    
     // MARK: - Properties
     fileprivate var backgroundView: UIView!
     fileprivate var containerView: UIView!
@@ -60,27 +64,34 @@ open class UPActionButton: UIView {
     
     fileprivate var containerOpenSize: CGSize = .zero
     fileprivate var buttonOpenCenter: CGPoint = .zero
-    fileprivate var isAnimating = false
+    fileprivate var isAnimatingOpenClose = false
     fileprivate var animatedItemTag: Int = 0
+    
+    fileprivate var isAnimatingShowHide = false
     
     fileprivate let superviewBoundsKeyPath = "layer.bounds"
     fileprivate var observesSuperviewBounds = false
     fileprivate var observesSuperviewContentOffset = false
-    fileprivate var observesScrollview = false
+    fileprivate var observesInteractiveScrollView = false
+    
+    fileprivate var scrollCurrentDirection: ScrollDirection = .none
+    fileprivate var scrollStartOffset: CGFloat = 0
+    fileprivate var scrollLastOffset: CGFloat = 0
+    fileprivate let interactiveScrollDistance: CGFloat = 64.0
     
     fileprivate(set) var items = [UPActionButtonItem]()
     
     public var delegate: UPActionButtonDelegate?
     
-    public var observedScrollView: UIScrollView? {
+    public var interactiveScrollView: UIScrollView? {
         didSet {
-            if let scrollView = oldValue, observesScrollview {
+            if let scrollView = oldValue, observesInteractiveScrollView {
                 scrollView.removeObserver(self, forKeyPath: "contentOffset")
-                observesScrollview = false
+                observesInteractiveScrollView = false
             }
-            if let scrollView = observedScrollView {
+            if let scrollView = interactiveScrollView {
                 scrollView.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
-                observesScrollview = true
+                observesInteractiveScrollView = true
             }
         }
     }
@@ -255,9 +266,9 @@ open class UPActionButton: UIView {
                 observesSuperviewContentOffset = false
             }
         }
-        if let scrollView = observedScrollView, observesScrollview {
+        if let scrollView = interactiveScrollView, observesInteractiveScrollView {
             scrollView.removeObserver(self, forKeyPath: "contentOffset")
-            observesScrollview = false
+            observesInteractiveScrollView = false
         }
     }
     
@@ -305,11 +316,11 @@ extension UPActionButton {
     }
     
     open func open() {
-        guard !isOpen && !isAnimating else { return }
+        guard !isOpen && !isAnimatingOpenClose else { return }
         
         delegate?.actionButtonWillOpen?(self)
         
-        isAnimating = true
+        isAnimatingOpenClose = true
         animatedItemTag = 0
         
         expandContainers()
@@ -318,11 +329,11 @@ extension UPActionButton {
     }
     
     open func close() {
-        guard isOpen && !isAnimating else { return }
+        guard isOpen && !isAnimatingOpenClose else { return }
         
         delegate?.actionButtonWillClose?(self)
         
-        isAnimating = true
+        isAnimatingOpenClose = true
         animatedItemTag = 0
         
         reduceItems()
@@ -333,7 +344,7 @@ extension UPActionButton {
     /* Display */
     
     open func show(animated: Bool = true) {
-        guard isHidden else { return }
+        guard isHidden && !isAnimatingShowHide else { return }
         
         if showAnimationType == .none || !animated {
             self.isHidden = false
@@ -342,16 +353,19 @@ extension UPActionButton {
         
         let animation = appearAnimations(type: showAnimationType)
         
+        isAnimatingShowHide = true
+        
         animation.preparation?()
         UIView.animate(withDuration: 0.3, delay: 0.0, options: .curveEaseInOut, animations: {
             animation.animation?()
         }) { (finished: Bool) in
             animation.completion?()
+            self.isAnimatingShowHide = false
         }
     }
     
     open func hide(animated: Bool = true) {
-        guard !isHidden else { return }
+        guard !isHidden && !isAnimatingShowHide else { return }
         
         if showAnimationType == .none || !animated {
             self.isHidden = true
@@ -360,11 +374,14 @@ extension UPActionButton {
         
         let animation = disappearAnimations(type: hideAnimationType)
         
+        isAnimatingShowHide = true
+        
         animation.preparation?()
         UIView.animate(withDuration: 0.3, delay: 0.0, options: .curveEaseInOut, animations: {
             animation.animation?()
         }) { (finished: Bool) in
             animation.completion?()
+            self.isAnimatingShowHide = false
         }
     }
     
@@ -388,16 +405,20 @@ extension UPActionButton {
             self.frame = superFrame
             backgroundView.frame = superFrame
         }
-        else if (object as? UIScrollView) == superview && keyPath == "contentOffset" && floating {
-            guard let scrollView = observedScrollView else { return }
+        
+        if (object as? UIView) == superview && keyPath == "contentOffset" && floating {
+            guard let scrollView = self.superview as? UIScrollView else { return }
             
             let margin: CGFloat = isOpen ? 0 : 20
             var frame = self.frame
             frame.origin.y = scrollView.frame.size.height - frame.size.height - margin + scrollView.contentOffset.y
             self.frame = frame
         }
-        else if (object as? UIScrollView) == observedScrollView && keyPath == "contentOffset" {
-            // TODO
+        
+        if (object as? UIScrollView) == interactiveScrollView && keyPath == "contentOffset" {
+            guard let scrollView = interactiveScrollView, !isOpen else { return }
+            
+            handleInteractiveScroll(from: scrollView)
         }
     }
 }
@@ -618,7 +639,7 @@ extension UPActionButton: CAAnimationDelegate {
             delegate?.actionButtonDidClose?(self)
         }
         
-        isAnimating = false
+        isAnimatingOpenClose = false
     }
     
     fileprivate func transitionButtonTitle() {
@@ -737,5 +758,41 @@ extension UPActionButton: CAAnimationDelegate {
             self.containerView.transform = CGAffineTransform.identity
             self.containerView.frame = initialContainerFrame
         })
+    }
+    
+    fileprivate func handleInteractiveScroll(from scrollView: UIScrollView) {
+        let scrollCurrentOffset = scrollView.contentOffset.y
+        
+        let scrollableSize = scrollView.contentSize.height - scrollView.frame.size.height
+        guard scrollCurrentOffset >= 0 && scrollCurrentOffset <= scrollableSize else { return }
+        
+        let scrolledDistance = scrollLastOffset - scrollCurrentOffset
+        let direction: ScrollDirection = scrolledDistance < 0 ? .down : scrolledDistance > 0 ? .up : .none
+        if direction != .none {
+            if direction != scrollCurrentDirection {
+                scrollCurrentDirection = direction
+                scrollStartOffset = scrollCurrentOffset
+            }
+            else {
+                if (scrollCurrentDirection == .down && !self.isHidden) || (scrollCurrentDirection == .up && self.isHidden) {
+                    let totalScrolledDistance = scrollStartOffset - scrollCurrentOffset
+                    if fabsf(Float(totalScrolledDistance)) > Float(interactiveScrollDistance) {
+                        switch scrollCurrentDirection {
+                        case .down:
+                            hide()
+                        case .up:
+                            show()
+                        default: break
+                        }
+                    }
+                        // Show the button right away when scrolling up from the bottom of the scrollview
+                    else if scrollCurrentDirection == .up && scrollLastOffset > scrollableSize - 10 {
+                        show()
+                    }
+                }
+            }
+        }
+        
+        scrollLastOffset = scrollCurrentOffset
     }
 }

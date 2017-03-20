@@ -10,7 +10,7 @@ import UIKit
 
 class ViewController: UITableViewController {
     
-    var rowCount = 30
+    var rowCount = 1
     var actionButton: UPActionButton!
 
     override func viewDidLoad() {
@@ -40,10 +40,11 @@ class ViewController: UITableViewController {
         button.cornerRadius = 30.0
         button.setShadow(color: .black, opacity: 0.5, radius: 3.0, offset: CGSize(width: 0, height: 2))
         button.showAnimationType = .scaleUp
+        button.hideAnimationType = .scaleDown
         button.overlayColor = UIColor(white: 0.0, alpha: 0.3)
         button.itemSize = CGSize(width: 40, height: 40)
         button.floating = true
-        button.observedScrollView = self.tableView
+        button.interactiveScrollView = self.tableView
         
         var items = [UPActionButtonItem]()
         
