@@ -16,9 +16,10 @@ import UIKit
     @objc optional func actionButtonDidClose(_: UPActionButton)
 }
 
-public enum UPActionButtonItemsPosition {
-    case up
-    case down
+public enum UPActionButtonDisplayAnimationType {
+    case none
+    case slideUp, slideDown, slideLeft, slideRight
+    case scaleUp, scaleDown
 }
 
 public enum UPActionButtonTransitionType {
@@ -28,21 +29,32 @@ public enum UPActionButtonTransitionType {
     case crossDissolveText(String)
 }
 
-public enum UPActionButtonDisplayAnimationType {
-    case none
-    case slideUp
-    case slideDown
-    case slideLeft
-    case slideRight
-    case scaleUp
-    case scaleDown
+public enum UPActionButtonItemsPosition {
+    case up
+    case down
+    // case round, halfRoundUp, halfRoundDown ...
 }
+
+public enum UPActionButtonItemsAnimationType {
+    case none
+    case fade, fadeUp, fadeDown, fadeLeft, fadeRight
+    case scaleUp, scaleDown
+    case slide
+    case bounce
+}
+
+public enum UPActionButtonItemsAnimationOrder {
+    case linear, progressive, progressiveInverse
+}
+
 
 open class UPActionButton: UIView {
     
     fileprivate enum ScrollDirection {
         case none, up, down
     }
+    
+    fileprivate typealias AnimationSteps = (preparation: (() -> Void)?, animation: (() -> Void)?, completion: (() -> Void)?)
     
     // MARK: - Properties
     fileprivate var backgroundView: UIView!
@@ -121,11 +133,17 @@ open class UPActionButton: UIView {
             items.forEach({ $0.size = itemSize })
         }
     }
-    public var itemsInterSpacing: CGFloat = 10.0
-    public var animationDuration: TimeInterval = 0.6
-    public var transitionType: UPActionButtonTransitionType = .none
+    public var itemsInterSpacing: CGFloat = 10.0 {
+        didSet {
+            computeOpenSize()
+        }
+    }
+    public var itemsAnimationType: UPActionButtonItemsAnimationType = .none
+    public var itemsAnimationOrder: UPActionButtonItemsAnimationOrder = .linear
+    public var animationDuration: TimeInterval = 1.0
     public var showAnimationType: UPActionButtonDisplayAnimationType = .none
     public var hideAnimationType: UPActionButtonDisplayAnimationType = .none
+    public var buttonTransitionType: UPActionButtonTransitionType = .none
     public var image: UIImage? {
         get { return openTitleImageView.image }
         set {
@@ -395,6 +413,7 @@ extension UPActionButton {
         button.layer.shadowOffset = offset
     }
     
+    
     /* Observers */
     
     override open func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
@@ -435,8 +454,8 @@ extension UPActionButton: UPActionButtonItemDelegate {
 }
 
 
-// MARK: - Private Helpers
-extension UPActionButton: CAAnimationDelegate {
+// MARK: - Private Helpers (Items)
+extension UPActionButton/*: CAAnimationDelegate*/ {
     
     /* Items Management */
     
@@ -445,8 +464,7 @@ extension UPActionButton: CAAnimationDelegate {
         items.append(item)
         
         item.size = itemSize
-        item.reduce(animated: false, duration: 0)
-        item.itemCenter = button.center
+        item.center = button.center
         
         containerView.insertSubview(item, at: 0)
         
@@ -480,10 +498,10 @@ extension UPActionButton: CAAnimationDelegate {
             
             switch item.titlePosition {
             case .left:
-                let itemLeftOffset = CGFloat(fabs(center.x - item.itemCenter.x))
+                let itemLeftOffset = item.center.x - item.frame.origin.x - center.x
                 leftOffset = max(leftOffset, itemLeftOffset)
             case .right:
-                let itemRightOffset = CGFloat(fabs(item.frame.size.width - item.itemCenter.x - center.x))
+                let itemRightOffset = item.frame.size.width - item.center.x - center.x
                 rightOffset = max(rightOffset, itemRightOffset)
             }
             
@@ -533,7 +551,7 @@ extension UPActionButton: CAAnimationDelegate {
         
         button.center = buttonOpenCenter
         
-        items.forEach({ $0.itemCenter = button.center })
+        items.forEach({ $0.center = button.center })
     }
     
     fileprivate func expandItems() {
@@ -541,24 +559,58 @@ extension UPActionButton: CAAnimationDelegate {
             self.backgroundView.alpha = 1.0
         }
         
-        var way: CGFloat = -1
-        var y = button.frame.origin.y - itemsInterSpacing
-        if itemsPosition == .down {
-            way = 1
-            y = button.frame.origin.y + button.frame.size.height + itemsInterSpacing
-        }
+        let lastAnimatedItemIndex: Int = itemsAnimationOrder == .progressiveInverse ? 0 : self.items.count - 1
+        
         for (index, item) in self.items.enumerated() {
-            //            let duration = Double(index+1) * animationDuration / Double(items.count)
-            let duration = Double(items.count - index) * animationDuration / Double(items.count)
             
-            let center = CGPoint(x: button.center.x, y: y + (item.frame.size.height / 2.0 * way))
-            let normalizedCenter = item.centerForItemCenter(center)
+            let center = self.center(forItem: item, index: index, itemsPosition: itemsPosition, opening: true)
+            var duration = self.animationDuration
+            var delay = 0.0
             
-            // TODO: delay
-            move(item: item, to: normalizedCenter, duration: duration, opening: true, bouncing: true)
-            item.expand(animated: true, duration: duration)
+            switch itemsAnimationOrder {
+            case .linear:
+                break
+            case .progressive:
+                //                duration = Double(index+1) * animationDuration / Double(items.count)
+                delay = Double(index) * 0.2
+            case .progressiveInverse:
+                //                duration = Double(items.count - index) * animationDuration / Double(items.count)
+                delay = Double(items.count - (index+1)) * 0.2
+            }
+         
+            // TODO: adjust for bounce effect
             
-            y += (item.frame.size.height + itemsInterSpacing) * way
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
+                
+                let animated = self.itemsAnimationType != .none
+                if animated {
+                    var damping: CGFloat = 1.0
+                    if self.itemsAnimationType == .bounce {
+                        damping = 0.7
+                        duration = Double(index) * self.animationDuration / Double(self.items.count) + self.animationDuration
+                    }
+                    
+                    let animation = self.openAnimations(forItem: item, to: center, type: self.itemsAnimationType)
+                    animation.preparation?()
+                    UIView.animate(withDuration: duration, delay: delay, usingSpringWithDamping: damping, initialSpringVelocity: 0.0, options: .curveEaseInOut, animations: {
+                        animation.animation?()
+                    }) { (finished: Bool) in
+                        animation.completion?()
+                        if index == lastAnimatedItemIndex {
+                            self.itemsAnimationDidStop()
+                        }
+                    }
+                } else {
+                    item.center = center
+                    item.alpha = 1.0
+                    if index == lastAnimatedItemIndex {
+                        self.itemsAnimationDidStop()
+                    }
+                }
+                
+                item.expand(animated: animated, duration: duration)
+            })
+            
         }
     }
     
@@ -575,58 +627,201 @@ extension UPActionButton: CAAnimationDelegate {
         containerView.frame = innerFrame
         button.frame = innerFrame
         
-        items.forEach({ $0.itemCenter = button.center })
+        items.forEach({ $0.center = button.center })
     }
     
     fileprivate func reduceItems() {
         
+        let lastAnimatedItemIndex: Int = itemsAnimationOrder == .progressiveInverse ? 0 : self.items.count - 1
+        
         for (index, item) in self.items.enumerated() {
-            //            let duration = Double(index+1) * animationDuration / Double(items.count)
-            let duration = Double(items.count - index) * animationDuration / Double(items.count)
             
-            let normalizedCenter = item.centerForItemCenter(button.center)
+            let center = self.center(forItem: item, index: index, itemsPosition: itemsPosition, opening: false)
+            let duration = self.animationDuration
+            var delay = 0.0
             
-            // TODO: delay
-            move(item: item, to: normalizedCenter, duration: duration, opening: false, bouncing: true)
-            item.reduce(animated: true, duration: duration)
+            switch itemsAnimationOrder {
+            case .linear:
+                break
+            case .progressive:
+//                duration = Double(index+1) * animationDuration / Double(items.count)
+                delay = Double(index) * 0.2
+            case .progressiveInverse:
+//                duration = Double(items.count - index) * animationDuration / Double(items.count)
+                delay = Double(items.count - (index+1)) * 0.2
+            }
+            
+            // TODO: adjust for bounce effect
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
+                
+                let animated = self.itemsAnimationType != .none
+                if animated {
+                    var damping: CGFloat = 1.0
+                    var velocity: CGFloat = 0.0
+                    if self.itemsAnimationType == .bounce {
+                        damping = 0.7
+                        velocity = -5.0
+                    }
+                    
+                    let animation = self.closeAnimations(forItem: item, to: center, type: self.itemsAnimationType)
+                    animation.preparation?()
+                    UIView.animate(withDuration: duration, delay: delay, usingSpringWithDamping: damping, initialSpringVelocity: velocity, options: .curveEaseInOut, animations: {
+                        animation.animation?()
+                    }) { (finished: Bool) in
+                        animation.completion?()
+                        if index == lastAnimatedItemIndex {
+                            self.itemsAnimationDidStop()
+                        }
+                    }
+                } else {
+                    item.center = center
+                    item.alpha = 0.0
+                    if index == lastAnimatedItemIndex {
+                        self.itemsAnimationDidStop()
+                    }
+                }
+                
+                item.reduce(animated: animated, duration: duration)
+            })
         }
         
         UIView.animate(withDuration: animationDuration, animations: {
             self.backgroundView.alpha = 0.0
-        }) { (finished: Bool) in
+        })
+    }
+    
+    
+    fileprivate func openAnimations(forItem item: UPActionButtonItem, to: CGPoint, type: UPActionButtonItemsAnimationType) -> AnimationSteps {
+        
+        let translationOffset: CGFloat = 20.0
+        let scaleOffset: CGFloat = 0.5
+        
+        return (preparation: {
+            var alpha: CGFloat = 0.0
+            switch type {
+            case .none: break
+            case .fade:
+                item.center = to
+            case .fadeDown:
+                item.center = CGPoint(x: to.x, y: to.y - translationOffset)
+            case .fadeUp:
+                item.center = CGPoint(x: to.x, y: to.y + translationOffset)
+            case .fadeLeft:
+                item.center = CGPoint(x: to.x + translationOffset, y: to.y)
+            case .fadeRight:
+                item.center = CGPoint(x: to.x - translationOffset, y: to.y)
+            case .scaleDown:
+                item.center = to
+                item.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
+            case .scaleUp:
+                item.center = to
+                item.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
+            case .slide: break
+            case .bounce:
+                alpha = 1.0
+            }
+            item.alpha = alpha
+        }, animation: {
+            item.transform = CGAffineTransform.identity
+            item.center = to
+            item.alpha = 1.0
+        }, completion: nil)
+    }
+    
+    
+    fileprivate func closeAnimations(forItem item: UPActionButtonItem, to: CGPoint, type: UPActionButtonItemsAnimationType) -> AnimationSteps {
+        
+        let translationOffset: CGFloat = 20.0
+        let scaleOffset: CGFloat = 0.5
+        
+        return (preparation: {
+            item.alpha = 1.0
+        }, animation: {
+            var alpha: CGFloat = 0.0
+            let center = item.center
+            switch type {
+            case .none: break
+            case .fade: break
+            case .fadeDown:
+                item.center = CGPoint(x: center.x, y: center.y - translationOffset)
+            case .fadeUp:
+                item.center = CGPoint(x: center.x, y: center.y + translationOffset)
+            case .fadeLeft:
+                item.center = CGPoint(x: center.x + translationOffset, y: center.y)
+            case .fadeRight:
+                item.center = CGPoint(x: center.x - translationOffset, y: center.y)
+            case .scaleDown:
+                item.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
+            case .scaleUp:
+                item.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
+            case .slide:
+                item.center = to
+            case .bounce:
+                item.center = to
+                alpha = 1.0
+            }
+            item.alpha = alpha
+        }, completion: {
+            item.transform = CGAffineTransform.identity
+            item.center = to
+            item.alpha = 0.0
+        })
+    }
+    
+    fileprivate func center(forItem item: UPActionButtonItem, index: Int, itemsPosition position: UPActionButtonItemsPosition, opening: Bool) -> CGPoint {
+        var center = button.center
+        
+        if (opening) {
+            let buttonFrame = button.frame
+            let itemSize = item.frame.size
+            let itemOffset = (itemSize.height + self.itemsInterSpacing) * CGFloat(index + 1)
             
-        }
-    }
-    
-    fileprivate func move(item: UPActionButtonItem, to center: CGPoint, duration: TimeInterval, opening: Bool, bouncing: Bool) {
-        let animation = CAKeyframeAnimation(keyPath: "position")
-        
-        let path = CGMutablePath()
-        path.move(to: item.center)
-        if bouncing {
-            var bouncingOffset: CGFloat = itemsInterSpacing
-            if itemsPosition == .up {
-                bouncingOffset *= -1
-            }
-            if opening {
-                path.addLine(to: CGPoint(x: center.x, y: center.y + bouncingOffset))
-                path.addLine(to: CGPoint(x: center.x, y: center.y - (bouncingOffset / 2.0)))
-            } else {
-                path.addLine(to: CGPoint(x: item.center.x, y: item.center.y + bouncingOffset))
+            switch position {
+            case .up:
+                center.y = buttonFrame.origin.y - itemOffset + itemSize.height / 2
+            case .down:
+                center.y = buttonFrame.origin.y + buttonFrame.size.height + itemOffset - itemSize.height / 2
             }
         }
-        path.addLine(to: center)
-        animation.path = path
         
-        animation.duration = duration
-        animation.timingFunction = CAMediaTimingFunction(name: kCAMediaTimingFunctionEaseIn)
-        animation.delegate = self
-        item.layer.add(animation, forKey: "positionAnimation")
-        
-        item.center = center
+        return center
     }
+
     
-    public func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
+//    fileprivate func move(item: UPActionButtonItem, to center: CGPoint, duration: TimeInterval, opening: Bool, bouncing: Bool) {
+//        let animation = CAKeyframeAnimation(keyPath: "position")
+//        
+//        let path = CGMutablePath()
+//        path.move(to: item.center)
+//        if bouncing {
+//            var bouncingOffset: CGFloat = itemsInterSpacing
+//            if itemsPosition == .up {
+//                bouncingOffset *= -1
+//            }
+//            if opening {
+//                path.addLine(to: CGPoint(x: center.x, y: center.y + bouncingOffset))
+//                path.addLine(to: CGPoint(x: center.x, y: center.y - (bouncingOffset / 2.0)))
+//            } else {
+//                path.addLine(to: CGPoint(x: item.center.x, y: item.center.y + bouncingOffset))
+//            }
+//        }
+//        path.addLine(to: center)
+//        animation.path = path
+//        
+//        animation.duration = duration
+//        animation.timingFunction = CAMediaTimingFunction(name: kCAMediaTimingFunctionEaseIn)
+//        animation.delegate = self
+//        item.layer.add(animation, forKey: "positionAnimation")
+//        
+//        item.center = center
+//    }
+    
+//    public func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
+//        itemAnimationDidStop()
+//    }
+    
+    fileprivate func itemAnimationDidStop() {
         animatedItemTag += 1
         guard animatedItemTag >= items.count else { return }
         
@@ -642,11 +837,105 @@ extension UPActionButton: CAAnimationDelegate {
         isAnimatingOpenClose = false
     }
     
+    fileprivate func itemsAnimationDidStop() {
+        isOpen = !isOpen
+        if isOpen {
+            delegate?.actionButtonDidOpen?(self)
+        }
+        else {
+            reduceContainers()
+            delegate?.actionButtonDidClose?(self)
+        }
+        
+        isAnimatingOpenClose = false
+    }
+    
+}
+
+
+// MARK: - Private Helpers (Button)
+extension UPActionButton {
+    
+    fileprivate func appearAnimations(type: UPActionButtonDisplayAnimationType) -> AnimationSteps {
+        
+        let initialContainerFrame = containerView.frame
+        let translationOffset: CGFloat = 20.0
+        let scaleOffset: CGFloat = 0.5
+        
+        return (preparation: {
+            var containerFrame = self.containerView.frame
+            switch type {
+            case .none: break
+            case .slideDown:
+                containerFrame.origin.y -= translationOffset
+                self.containerView.frame = containerFrame
+            case .slideUp:
+                containerFrame.origin.y += translationOffset
+                self.containerView.frame = containerFrame
+            case .slideLeft:
+                containerFrame.origin.x += translationOffset
+                self.containerView.frame = containerFrame
+            case .slideRight:
+                containerFrame.origin.x -= translationOffset
+                self.containerView.frame = containerFrame
+            case .scaleDown:
+                self.containerView.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
+            case .scaleUp:
+                self.containerView.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
+            }
+            
+            self.isHidden = false
+            self.containerView.alpha = 0.0
+        }, animation: {
+            self.containerView.transform = CGAffineTransform.identity
+            self.containerView.frame = initialContainerFrame
+            self.containerView.alpha = 1.0
+        }, completion: nil)
+    }
+    
+    fileprivate func disappearAnimations(type: UPActionButtonDisplayAnimationType) -> AnimationSteps {
+        
+        let initialContainerFrame = containerView.frame
+        let translationOffset: CGFloat = 20.0
+        let scaleOffset: CGFloat = 0.5
+        
+        return (preparation: {
+            self.containerView.alpha = 1.0
+        }, animation: {
+            var containerFrame = self.containerView.frame
+            switch type {
+            case .none: break
+            case .slideDown:
+                containerFrame.origin.y += translationOffset
+                self.containerView.frame = containerFrame
+            case .slideUp:
+                containerFrame.origin.y -= translationOffset
+                self.containerView.frame = containerFrame
+            case .slideLeft:
+                containerFrame.origin.x -= translationOffset
+                self.containerView.frame = containerFrame
+            case .slideRight:
+                containerFrame.origin.x += translationOffset
+                self.containerView.frame = containerFrame
+            case .scaleDown:
+                self.containerView.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
+            case .scaleUp:
+                self.containerView.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
+            }
+            
+            self.containerView.alpha = 0.0
+        }, completion: {
+            self.isHidden = true
+            self.containerView.transform = CGAffineTransform.identity
+            self.containerView.frame = initialContainerFrame
+        })
+    }
+    
     fileprivate func transitionButtonTitle() {
-        let duration = animationDuration / 2.0
+        let duration = animationDuration
         let opening = !isOpen
         
-        switch transitionType {
+        switch buttonTransitionType {
         case .none: break
             
         case .rotate(let angle):
@@ -685,81 +974,6 @@ extension UPActionButton: CAAnimationDelegate {
         }
     }
     
-    fileprivate func appearAnimations(type: UPActionButtonDisplayAnimationType) -> (preparation: (() -> Void)?, animation: (() -> Void)?, completion: (() -> Void)?) {
-        
-        let initialContainerFrame = containerView.frame
-        let translationOffset: CGFloat = 20.0
-        let scaleOffset: CGFloat = 0.5
-        
-        return (preparation: {
-            var containerFrame = self.containerView.frame
-            switch type {
-            case .none: break
-            case .slideDown:
-                containerFrame.origin.y -= translationOffset
-                self.containerView.frame = containerFrame
-            case .slideUp:
-                containerFrame.origin.y += translationOffset
-                self.containerView.frame = containerFrame
-            case .slideLeft:
-                containerFrame.origin.x += translationOffset
-                self.containerView.frame = containerFrame
-            case .slideRight:
-                containerFrame.origin.x -= translationOffset
-                self.containerView.frame = containerFrame
-            case .scaleDown:
-                self.containerView.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
-            case .scaleUp:
-                self.containerView.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
-            }
-            
-            self.isHidden = false
-            self.containerView.alpha = 0.0
-        }, animation: {
-            self.containerView.transform = CGAffineTransform.identity
-            self.containerView.frame = initialContainerFrame
-            self.containerView.alpha = 1.0
-        }, completion: nil)
-    }
-    
-    fileprivate func disappearAnimations(type: UPActionButtonDisplayAnimationType) -> (preparation: (() -> Void)?, animation: (() -> Void)?, completion: (() -> Void)?) {
-        
-        let initialContainerFrame = containerView.frame
-        let translationOffset: CGFloat = 20.0
-        let scaleOffset: CGFloat = 0.5
-        
-        return (preparation: {
-            self.containerView.alpha = 1.0
-        }, animation: {
-            var containerFrame = self.containerView.frame
-            switch type {
-            case .none: break
-            case .slideDown:
-                containerFrame.origin.y += translationOffset
-                self.containerView.frame = containerFrame
-            case .slideUp:
-                containerFrame.origin.y -= translationOffset
-                self.containerView.frame = containerFrame
-            case .slideLeft:
-                containerFrame.origin.x -= translationOffset
-                self.containerView.frame = containerFrame
-            case .slideRight:
-                containerFrame.origin.x += translationOffset
-                self.containerView.frame = containerFrame
-            case .scaleDown:
-                self.containerView.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
-            case .scaleUp:
-                self.containerView.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
-            }
-            
-            self.containerView.alpha = 0.0
-        }, completion: {
-            self.isHidden = true
-            self.containerView.transform = CGAffineTransform.identity
-            self.containerView.frame = initialContainerFrame
-        })
-    }
-    
     fileprivate func handleInteractiveScroll(from scrollView: UIScrollView) {
         let scrollCurrentOffset = scrollView.contentOffset.y
         
@@ -795,4 +1009,5 @@ extension UPActionButton: CAAnimationDelegate {
         
         scrollLastOffset = scrollCurrentOffset
     }
+    
 }

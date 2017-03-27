@@ -55,11 +55,6 @@ open class UPActionButtonItem: UIView {
         }
     }
     
-    public var itemCenter: CGPoint {
-        get { return button.center }
-        set { self.center = self.centerForItemCenter(newValue) }
-    }
-    
     public var delegate: UPActionButtonItemDelegate?
     
     /* Customization */
@@ -185,12 +180,6 @@ extension UPActionButtonItem {
         }
     }
     
-    open func centerForItemCenter(_ center: CGPoint) -> CGPoint {
-        let offsetX = button.center.x - self.frame.size.width/2.0
-        let offsetY = button.center.y - self.frame.size.height/2.0
-        return CGPoint(x: center.x - offsetX, y: center.y - offsetY)
-    }
-    
     func didTouch(sender: UIButton) {
         self.delegate?.didTouch(item: self)
         self.action?()
@@ -233,6 +222,18 @@ extension UPActionButtonItem {
         case .right:
             button.center = CGPoint(x: buttonSize.width/2.0, y: self.frame.size.height/2.0)
             titleLabel.center = CGPoint(x: self.frame.size.width - titleSize.width/2.0, y: self.frame.size.height/2.0)
+        }
+        
+        let horizontalRatio: CGFloat = button.center.x / self.frame.size.width
+        let verticalRatio: CGFloat = button.center.y / self.frame.size.height
+        self.layer.anchorPoint = CGPoint(x: horizontalRatio, y: verticalRatio)
+        
+        if isExpanded {
+            isExpanded = false
+            expand(animated: false, duration: 0)
+        } else {
+            isExpanded = true
+            reduce(animated: false, duration: 0)
         }
     }
 

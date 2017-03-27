@@ -8,7 +8,7 @@
 
 import UIKit
 
-class ViewController: UITableViewController {
+class ViewController: UITableViewController, UPActionButtonDelegate {
     
     var rowCount = 1
     var actionButton: UPActionButton!
@@ -33,7 +33,7 @@ class ViewController: UITableViewController {
     
     fileprivate func createActionButton() -> UPActionButton {
         let button = UPActionButton(frame: CGRect(x: 200, y: 200, width: 60, height: 60), image: nil, title: "+")
-        button.transitionType = .rotate(2.35)
+        button.buttonTransitionType = .rotate(2.35)
         button.titleColor = UIColor.white
         button.font = UIFont.systemFont(ofSize: 40)
         button.color = UIColor.blue
@@ -45,6 +45,9 @@ class ViewController: UITableViewController {
         button.itemSize = CGSize(width: 40, height: 40)
         button.floating = true
         button.interactiveScrollView = self.tableView
+        button.itemsAnimationType = .none
+        button.itemsAnimationOrder = .progressive
+        button.delegate = self
         
         var items = [UPActionButtonItem]()
         
@@ -77,6 +80,14 @@ class ViewController: UITableViewController {
     fileprivate func addRows(_ rows: Int) {
         rowCount += rows
         self.tableView.reloadData()
+    }
+    
+    var itemsAnimation: Int = 0
+    func actionButtonDidClose(_: UPActionButton) {
+        itemsAnimation += 1
+        let animations: [UPActionButtonItemsAnimationType] = [.none, .fade, .fadeUp, .fadeDown, .fadeLeft, .fadeRight, .scaleUp, .scaleDown, .slide, .bounce]
+        let index = itemsAnimation%animations.count
+        actionButton.itemsAnimationType = animations[index]
     }
 
 }
