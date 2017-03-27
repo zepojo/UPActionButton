@@ -29,6 +29,11 @@ public enum UPActionButtonTransitionType {
     case crossDissolveText(String)
 }
 
+public enum UPActionButtonOverlayStyle {
+    case plain(UIColor)
+    case blurred(UIVisualEffect)
+}
+
 public enum UPActionButtonItemsPosition {
     case up
     case down
@@ -57,7 +62,7 @@ open class UPActionButton: UIView {
     fileprivate typealias AnimationSteps = (preparation: (() -> Void)?, animation: (() -> Void)?, completion: (() -> Void)?)
     
     // MARK: - Properties
-    fileprivate var backgroundView: UIView!
+    fileprivate var backgroundView: UIVisualEffectView!
     fileprivate var containerView: UIView!
     fileprivate var button: UIButton!
     fileprivate var openTitleLabel: UILabel!
@@ -184,9 +189,18 @@ open class UPActionButton: UIView {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
     }
-    public var overlayColor: UIColor? {
-        get { return backgroundView.backgroundColor }
-        set { backgroundView.backgroundColor = newValue }
+    public var overlayStyle: UPActionButtonOverlayStyle? {
+        didSet {
+            let style: UPActionButtonOverlayStyle = overlayStyle ?? .plain(.clear)
+            switch style {
+            case .plain(let color):
+                backgroundView.backgroundColor = color
+                backgroundView.effect = nil
+            case .blurred(let visualEffect):
+                backgroundView.backgroundColor = .clear
+                backgroundView.effect = visualEffect
+            }
+        }
     }
     
     
@@ -196,11 +210,10 @@ open class UPActionButton: UIView {
         
         let innerFrame = CGRect(origin: .zero, size: frame.size)
         
-        backgroundView = UIView(frame: innerFrame)
+        backgroundView = UIVisualEffectView(frame: innerFrame)
         backgroundView.isHidden = true
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(toggle))
         backgroundView.addGestureRecognizer(tapGesture)
-        self.overlayColor = UIColor(white: 1.0, alpha: 0.4)
         self.addSubview(backgroundView)
         
         containerView = UIView(frame: innerFrame)

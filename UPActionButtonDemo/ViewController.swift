@@ -41,11 +41,11 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
         button.setShadow(color: .black, opacity: 0.5, radius: 3.0, offset: CGSize(width: 0, height: 2))
         button.showAnimationType = .scaleUp
         button.hideAnimationType = .scaleDown
-        button.overlayColor = UIColor(white: 0.0, alpha: 0.3)
+        button.overlayStyle = .plain(UIColor(white: 0.0, alpha: 0.3))
         button.itemSize = CGSize(width: 40, height: 40)
         button.floating = true
         button.interactiveScrollView = self.tableView
-        button.itemsAnimationType = .none
+        button.itemsAnimationType = .scaleDown
         button.itemsAnimationOrder = .progressive
         button.delegate = self
         
@@ -85,13 +85,13 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
         self.tableView.reloadData()
     }
     
-    var itemsAnimation: Int = 0
-    func actionButtonDidClose(_: UPActionButton) {
-        itemsAnimation += 1
-        let animations: [UPActionButtonItemsAnimationType] = [.none, .fade, .fadeUp, .fadeDown, .fadeLeft, .fadeRight, .scaleUp, .scaleDown, .slide, .bounce]
-        let index = itemsAnimation%animations.count
-        actionButton.itemsAnimationType = animations[index]
-    }
+//    var itemsAnimation: Int = 0
+//    func actionButtonDidClose(_: UPActionButton) {
+//        itemsAnimation += 1
+//        let animations: [UPActionButtonItemsAnimationType] = [.none, .fade, .fadeUp, .fadeDown, .fadeLeft, .fadeRight, .scaleUp, .scaleDown, .slide, .bounce]
+//        let index = itemsAnimation%animations.count
+//        actionButton.itemsAnimationType = animations[index]
+//    }
 
 }
 
