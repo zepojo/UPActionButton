@@ -69,7 +69,10 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
         items.forEach { (item: UPActionButtonItem) in
             item.cornerRadius = 20.0
             item.color = UIColor.blue
-            item.titleColor = UIColor.black
+            item.titleColor = UIColor.white
+            item.titleBackgroundColor = UIColor(white: 0.0, alpha: 0.7)
+            item.titleCornerRadius = 4
+            item.titleInsets = UIEdgeInsets(top: 4.0, left: 10.0, bottom: 4.0, right: 10.0)
         }
         
         button.add(items: items)

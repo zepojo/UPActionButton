@@ -24,7 +24,9 @@ open class UPActionButtonItem: UIView {
     
     // MARK: - Properties
     fileprivate var tapButton: UIButton!
+    fileprivate var button: UIButton!
     fileprivate var titleLabel: UILabel!
+    fileprivate var titleContainer: UIView!
     fileprivate var action: (() -> Void)?
     fileprivate var isExpanded: Bool = false
     fileprivate var isAnimating: Bool = false
@@ -36,21 +38,20 @@ open class UPActionButtonItem: UIView {
         return (title as NSString).size(attributes: [NSFontAttributeName: titleLabel.font])
     }
     
-    public var button: UIButton!
+    fileprivate var titleContainerSize: CGSize {
+        let titleLabelSize = self.titleLabelSize
+        return CGSize(width: titleLabelSize.width + titleInsets.left * 2, height: titleLabelSize.height + titleInsets.top * 2)
+    }
     
     public var size: CGSize = .zero {
         didSet {
-            let titleSize = titleLabelSize
-            
-            var frame = self.frame
-            frame.size.width = titleSize.width + internMargin + size.width
-            frame.size.height = max(titleSize.height, size.height)
-            self.frame = frame
-            
-            titleLabel.frame = CGRect(origin: .zero, size: titleSize)
-            button.frame = CGRect(origin: .zero, size: size)
-            button.layer.cornerRadius = min(size.width, size.height) / 2.0
-            
+            updateElementsSizes()
+            layoutElements()
+        }
+    }
+    public var titleInsets = UIEdgeInsets(top: 2.0, left: 5.0, bottom: 2.0, right: 5.0) {
+        didSet {
+            updateElementsSizes()
             layoutElements()
         }
     }
@@ -65,14 +66,6 @@ open class UPActionButtonItem: UIView {
     }
     public var internMargin: CGFloat = 5.0
     public var closeOnTap: Bool = true
-    public var titleColor: UIColor {
-        get { return titleLabel.textColor }
-        set { titleLabel.textColor = newValue }
-    }
-    public var titleFont: UIFont {
-        get { return titleLabel.font }
-        set { titleLabel.font = newValue }
-    }
     public var color: UIColor? {
         get { return button.backgroundColor }
         set { button.backgroundColor = newValue }
@@ -81,15 +74,36 @@ open class UPActionButtonItem: UIView {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
     }
+    public var titleColor: UIColor {
+        get { return titleLabel.textColor }
+        set { titleLabel.textColor = newValue }
+    }
+    public var titleFont: UIFont {
+        get { return titleLabel.font }
+        set { titleLabel.font = newValue }
+    }
+    public var titleBackgroundColor: UIColor? {
+        get { return titleContainer.backgroundColor }
+        set { titleContainer.backgroundColor = newValue }
+    }
+    public var titleCornerRadius: CGFloat {
+        get { return titleContainer.layer.cornerRadius }
+        set { titleContainer.layer.cornerRadius = newValue }
+    }
+    
     
     // MARK: - Initialization
     public init(title: String, buttonImage: UIImage?, buttonText: String?, action: (() -> Void)?) {
         super.init(frame: .zero)
         
+        titleContainer = UIView()
+        titleContainer.clipsToBounds = true
+        titleContainer.alpha = 0.0
+        self.addSubview(titleContainer)
+        
         titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.alpha = 0.0
-        self.addSubview(titleLabel)
+        titleContainer.addSubview(titleLabel)
         
         button = UIButton(type: .custom)
         button.isUserInteractionEnabled = false
@@ -131,16 +145,16 @@ extension UPActionButtonItem {
         isExpanded = true
         
         let operations = {
-            var titleFrame = self.titleLabel.frame
+            var titleFrame = self.titleContainer.frame
             switch self.titlePosition {
             case .left:
                 titleFrame.origin.x = 0
             case .right:
                 titleFrame.origin.x = self.button.frame.size.width + self.internMargin
             }
-            titleFrame.size.width = self.titleLabelSize.width
-            self.titleLabel.frame = titleFrame
-            self.titleLabel.alpha = 1.0
+            titleFrame.size.width = self.titleContainerSize.width
+            self.titleContainer.frame = titleFrame
+            self.titleContainer.alpha = 1.0
         }
         
         if animated {
@@ -161,11 +175,11 @@ extension UPActionButtonItem {
         isExpanded = false
         
         let operations = {
-            var titleFrame = self.titleLabel.frame
+            var titleFrame = self.titleContainer.frame
             titleFrame.origin.x = self.button.center.x
             titleFrame.size.width = 0
-            self.titleLabel.frame = titleFrame
-            self.titleLabel.alpha = 0.0
+            self.titleContainer.frame = titleFrame
+            self.titleContainer.alpha = 0.0
         }
         
         if animated {
@@ -211,17 +225,31 @@ extension UPActionButtonItem {
 
     /* Interactions */
     
+    fileprivate func updateElementsSizes() {
+        let titleSize = titleContainerSize
+        
+        var frame = self.frame
+        frame.size.width = titleSize.width + internMargin + size.width
+        frame.size.height = max(titleSize.height, size.height)
+        self.frame = frame
+        
+        titleContainer.frame = CGRect(origin: .zero, size: titleSize)
+        titleLabel.frame = CGRect(origin: CGPoint(x: titleInsets.left, y: titleInsets.top), size: titleLabelSize)
+        button.frame = CGRect(origin: .zero, size: size)
+        button.layer.cornerRadius = min(size.width, size.height) / 2.0
+    }
+    
     fileprivate func layoutElements() {
-        let titleSize = titleLabel.frame.size
+        let titleSize = titleContainer.frame.size
         let buttonSize = button.frame.size
         
         switch titlePosition {
         case .left:
-            titleLabel.center = CGPoint(x: titleSize.width/2.0, y: self.frame.size.height/2.0)
+            titleContainer.center = CGPoint(x: titleSize.width/2.0, y: self.frame.size.height/2.0)
             button.center = CGPoint(x: self.frame.size.width - buttonSize.width/2.0, y: self.frame.size.height/2.0)
         case .right:
             button.center = CGPoint(x: buttonSize.width/2.0, y: self.frame.size.height/2.0)
-            titleLabel.center = CGPoint(x: self.frame.size.width - titleSize.width/2.0, y: self.frame.size.height/2.0)
+            titleContainer.center = CGPoint(x: self.frame.size.width - titleSize.width/2.0, y: self.frame.size.height/2.0)
         }
         
         let horizontalRatio: CGFloat = button.center.x / self.frame.size.width
