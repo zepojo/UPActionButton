@@ -41,7 +41,8 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
         button.setShadow(color: .black, opacity: 0.5, radius: 3.0, offset: CGSize(width: 0, height: 2))
         button.showAnimationType = .scaleUp
         button.hideAnimationType = .scaleDown
-        button.overlayStyle = .plain(UIColor(white: 0.0, alpha: 0.3))
+        button.overlayType = .plain(UIColor(white: 0.0, alpha: 0.3))
+        button.overlayAnimationType = .bubble
         button.itemSize = CGSize(width: 40, height: 40)
         button.floating = true
         button.interactiveScrollView = self.tableView
@@ -110,6 +111,7 @@ extension ViewController {
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "UPActionButtonDemoCell", for: indexPath)
         cell.textLabel?.text = "Cell \(indexPath.row)"
+        cell.backgroundColor = .red
         return cell
     }
     

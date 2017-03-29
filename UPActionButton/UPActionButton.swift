@@ -29,9 +29,15 @@ public enum UPActionButtonTransitionType {
     case crossDissolveText(String)
 }
 
-public enum UPActionButtonOverlayStyle {
+public enum UPActionButtonOverlayType {
     case plain(UIColor)
     case blurred(UIVisualEffect)
+}
+
+public enum UPActionButtonOverlayAnimationType {
+    case none
+    case fade
+    case bubble
 }
 
 public enum UPActionButtonItemsPosition {
@@ -189,16 +195,30 @@ open class UPActionButton: UIView {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
     }
-    public var overlayStyle: UPActionButtonOverlayStyle? {
+    public var overlayType: UPActionButtonOverlayType? {
         didSet {
-            let style: UPActionButtonOverlayStyle = overlayStyle ?? .plain(.clear)
-            switch style {
+            let type: UPActionButtonOverlayType = overlayType ?? .plain(.clear)
+            switch type {
             case .plain(let color):
                 backgroundView.backgroundColor = color
                 backgroundView.effect = nil
             case .blurred(let visualEffect):
+                guard self.overlayAnimationType != .bubble else {
+                    print("[UPActionButton] The blurred overlay type is not compatible with the bubble overlay animation")
+                    self.overlayType = oldValue
+                    return
+                }
                 backgroundView.backgroundColor = .clear
                 backgroundView.effect = visualEffect
+            }
+        }
+    }
+    public var overlayAnimationType: UPActionButtonOverlayAnimationType = .none {
+        didSet {
+            if self.overlayType != nil, case .blurred(_) = self.overlayType!, overlayAnimationType == .bubble {
+                print("[UPActionButton] The bubble overlay animation is not compatible with the blurred overlay type")
+                self.overlayAnimationType = oldValue
+                return
             }
         }
     }
@@ -355,6 +375,7 @@ extension UPActionButton {
         animatedItemTag = 0
         
         expandContainers()
+        expandOverlay()
         expandItems()
         transitionButtonTitle()
     }
@@ -367,6 +388,7 @@ extension UPActionButton {
         isAnimatingOpenClose = true
         animatedItemTag = 0
         
+        reduceOverlay()
         reduceItems()
         transitionButtonTitle()
     }
@@ -500,6 +522,211 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
     
     /* Interactions */
     
+    fileprivate func expandContainers() {
+        let origin = self.frame.origin
+        
+        var superOrigin: CGPoint = .zero
+        if let superScrollview = self.superview as? UIScrollView {
+            superOrigin = superScrollview.contentOffset
+        }
+        let superSize: CGSize = superview?.frame.size ?? .zero
+        let superFrame = CGRect(origin: superOrigin, size: superSize)
+        self.frame = superFrame
+        
+        var containerFrame = containerView.frame
+        containerFrame.origin = CGPoint(x: origin.x - superOrigin.x, y: origin.y - superOrigin.y)
+        containerFrame.size = containerOpenSize
+        containerFrame.origin.x -= buttonOpenCenter.x - button.frame.size.width / 2.0
+        if itemsPosition == .up {
+            let yOffset: CGFloat = buttonOpenCenter.y - button.frame.size.height / 2.0
+            containerFrame.origin.y -= yOffset
+        }
+        containerView.frame = containerFrame
+        
+        button.center = buttonOpenCenter
+        
+        items.forEach({ $0.center = button.center })
+    }
+    
+    fileprivate func expandOverlay() {
+        backgroundView.isHidden = false
+        
+        let animated = self.overlayAnimationType != .none
+        if animated {
+            let animation = self.overlayAnimations(opening: true, type: overlayAnimationType)
+            animation.preparation?()
+            UIView.animate(withDuration: animationDuration, delay: 0.0, options: .curveEaseInOut, animations: {
+                animation.animation?()
+            }, completion: { (finished: Bool) in
+                animation.completion?()
+            })
+        } else {
+            backgroundView.frame = CGRect(origin: .zero, size: self.frame.size)
+            backgroundView.alpha = 1.0
+        }
+    }
+    
+    fileprivate func expandItems() {
+        let lastAnimatedItemIndex: Int = itemsAnimationOrder == .progressiveInverse ? 0 : self.items.count - 1
+        
+        for (index, item) in self.items.enumerated() {
+            
+            let center = self.center(forItem: item, index: index, itemsPosition: itemsPosition, opening: true)
+            var duration = self.animationDuration
+            var delay = 0.0
+            
+            switch itemsAnimationOrder {
+            case .linear:
+                break
+            case .progressive:
+                //                duration = Double(index+1) * animationDuration / Double(items.count)
+                delay = Double(index) * 0.2
+            case .progressiveInverse:
+                //                duration = Double(items.count - index) * animationDuration / Double(items.count)
+                delay = Double(items.count - (index+1)) * 0.2
+            }
+            
+            // TODO: adjust for bounce effect
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
+                
+                let animated = self.itemsAnimationType != .none
+                if animated {
+                    var damping: CGFloat = 1.0
+                    if self.itemsAnimationType == .bounce {
+                        damping = 0.7
+                        duration = Double(index) * self.animationDuration / Double(self.items.count) + self.animationDuration
+                    }
+                    
+                    let animation = self.openAnimations(forItem: item, to: center, type: self.itemsAnimationType)
+                    animation.preparation?()
+                    UIView.animate(withDuration: duration, delay: delay, usingSpringWithDamping: damping, initialSpringVelocity: 0.0, options: .curveEaseInOut, animations: {
+                        animation.animation?()
+                    }) { (finished: Bool) in
+                        animation.completion?()
+                        if index == lastAnimatedItemIndex {
+                            self.itemsAnimationDidStop()
+                        }
+                    }
+                } else {
+                    item.center = center
+                    item.alpha = 1.0
+                    if index == lastAnimatedItemIndex {
+                        self.itemsAnimationDidStop()
+                    }
+                }
+                
+                item.expand(animated: animated, duration: duration)
+            })
+            
+        }
+    }
+    
+    
+    fileprivate func reduceContainers() {
+        let superview = self.superview ?? self
+        let baseOrigin = containerView.convert(button.frame.origin, to: superview)
+        let baseSize = button.frame.size
+        let frame = CGRect(origin: baseOrigin, size: baseSize)
+        let innerFrame = CGRect(origin: CGPoint(x: 0, y: 0), size: baseSize)
+        
+        self.frame = frame
+        containerView.frame = innerFrame
+        button.frame = innerFrame
+        
+        items.forEach({ $0.center = button.center })
+    }
+    
+    fileprivate func reduceOverlay() {
+        let animated = self.overlayAnimationType != .none
+        if animated {
+            let animation = self.overlayAnimations(opening: false, type: overlayAnimationType)
+            animation.preparation?()
+            UIView.animate(withDuration: animationDuration, delay: 0.0, options: .curveEaseInOut, animations: {
+                animation.animation?()
+            }, completion: { (finished: Bool) in
+                animation.completion?()
+            })
+        } else {
+            self.backgroundView.frame = CGRect(origin: .zero, size: self.frame.size)
+            self.backgroundView.alpha = 0.0
+            self.backgroundView.isHidden = true
+        }
+    }
+    
+    fileprivate func reduceItems() {
+        let lastAnimatedItemIndex: Int = itemsAnimationOrder == .progressiveInverse ? 0 : self.items.count - 1
+        
+        for (index, item) in self.items.enumerated() {
+            
+            let center = self.center(forItem: item, index: index, itemsPosition: itemsPosition, opening: false)
+            let duration = self.animationDuration
+            var delay = 0.0
+            
+            switch itemsAnimationOrder {
+            case .linear:
+                break
+            case .progressive:
+                //                duration = Double(index+1) * animationDuration / Double(items.count)
+                delay = Double(index) * 0.2
+            case .progressiveInverse:
+                //                duration = Double(items.count - index) * animationDuration / Double(items.count)
+                delay = Double(items.count - (index+1)) * 0.2
+            }
+            
+            // TODO: adjust for bounce effect
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
+                
+                let animated = self.itemsAnimationType != .none
+                if animated {
+                    var damping: CGFloat = 1.0
+                    var velocity: CGFloat = 0.0
+                    if self.itemsAnimationType == .bounce {
+                        damping = 0.7
+                        velocity = -5.0
+                    }
+                    
+                    let animation = self.closeAnimations(forItem: item, to: center, type: self.itemsAnimationType)
+                    animation.preparation?()
+                    UIView.animate(withDuration: duration, delay: delay, usingSpringWithDamping: damping, initialSpringVelocity: velocity, options: .curveEaseInOut, animations: {
+                        animation.animation?()
+                    }) { (finished: Bool) in
+                        animation.completion?()
+                        if index == lastAnimatedItemIndex {
+                            self.itemsAnimationDidStop()
+                        }
+                    }
+                } else {
+                    item.center = center
+                    item.alpha = 0.0
+                    if index == lastAnimatedItemIndex {
+                        self.itemsAnimationDidStop()
+                    }
+                }
+                
+                item.reduce(animated: animated, duration: duration)
+            })
+        }
+    }
+    
+    
+    fileprivate func itemsAnimationDidStop() {
+        isOpen = !isOpen
+        if isOpen {
+            delegate?.actionButtonDidOpen?(self)
+        }
+        else {
+            reduceContainers()
+            delegate?.actionButtonDidClose?(self)
+        }
+        
+        isAnimatingOpenClose = false
+    }
+    
+    
+    /* Geometry Computations */
+    
     fileprivate func computeOpenSize() {
         let center = CGPoint(x: button.frame.size.width / 2.0, y: button.frame.size.height / 2.0)
         var height: CGFloat = button.frame.size.height
@@ -538,175 +765,127 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         buttonOpenCenter = CGPoint(x: leftOffset + button.frame.size.width / 2.0, y: baseButtonCenterY)
     }
     
-    fileprivate func expandContainers() {
-        let origin = self.frame.origin
+    fileprivate func center(forItem item: UPActionButtonItem, index: Int, itemsPosition position: UPActionButtonItemsPosition, opening: Bool) -> CGPoint {
+        var center = button.center
         
-        var superOrigin: CGPoint = .zero
-        if let superScrollview = self.superview as? UIScrollView {
-            superOrigin = superScrollview.contentOffset
-        }
-        let superSize: CGSize = superview?.frame.size ?? .zero
-        let superFrame = CGRect(origin: superOrigin, size: superSize)
-        self.frame = superFrame
-        backgroundView.frame = CGRect(origin: .zero, size: superSize)
-        backgroundView.alpha = 0.0
-        backgroundView.isHidden = false
-        
-        var containerFrame = containerView.frame
-        containerFrame.origin = CGPoint(x: origin.x - superOrigin.x, y: origin.y - superOrigin.y)
-        containerFrame.size = containerOpenSize
-        containerFrame.origin.x -= buttonOpenCenter.x - button.frame.size.width / 2.0
-        if itemsPosition == .up {
-            let yOffset: CGFloat = buttonOpenCenter.y - button.frame.size.height / 2.0
-            containerFrame.origin.y -= yOffset
-        }
-        containerView.frame = containerFrame
-        
-        button.center = buttonOpenCenter
-        
-        items.forEach({ $0.center = button.center })
-    }
-    
-    fileprivate func expandItems() {
-        UIView.animate(withDuration: animationDuration) {
-            self.backgroundView.alpha = 1.0
-        }
-        
-        let lastAnimatedItemIndex: Int = itemsAnimationOrder == .progressiveInverse ? 0 : self.items.count - 1
-        
-        for (index, item) in self.items.enumerated() {
+        if (opening) {
+            let buttonFrame = button.frame
+            let itemSize = item.frame.size
+            let itemOffset = (itemSize.height + self.itemsInterSpacing) * CGFloat(index + 1)
             
-            let center = self.center(forItem: item, index: index, itemsPosition: itemsPosition, opening: true)
-            var duration = self.animationDuration
-            var delay = 0.0
-            
-            switch itemsAnimationOrder {
-            case .linear:
-                break
-            case .progressive:
-                //                duration = Double(index+1) * animationDuration / Double(items.count)
-                delay = Double(index) * 0.2
-            case .progressiveInverse:
-                //                duration = Double(items.count - index) * animationDuration / Double(items.count)
-                delay = Double(items.count - (index+1)) * 0.2
+            switch position {
+            case .up:
+                center.y = buttonFrame.origin.y - itemOffset + itemSize.height / 2
+            case .down:
+                center.y = buttonFrame.origin.y + buttonFrame.size.height + itemOffset - itemSize.height / 2
             }
-         
-            // TODO: adjust for bounce effect
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
-                
-                let animated = self.itemsAnimationType != .none
-                if animated {
-                    var damping: CGFloat = 1.0
-                    if self.itemsAnimationType == .bounce {
-                        damping = 0.7
-                        duration = Double(index) * self.animationDuration / Double(self.items.count) + self.animationDuration
-                    }
-                    
-                    let animation = self.openAnimations(forItem: item, to: center, type: self.itemsAnimationType)
-                    animation.preparation?()
-                    UIView.animate(withDuration: duration, delay: delay, usingSpringWithDamping: damping, initialSpringVelocity: 0.0, options: .curveEaseInOut, animations: {
-                        animation.animation?()
-                    }) { (finished: Bool) in
-                        animation.completion?()
-                        if index == lastAnimatedItemIndex {
-                            self.itemsAnimationDidStop()
-                        }
-                    }
-                } else {
-                    item.center = center
-                    item.alpha = 1.0
-                    if index == lastAnimatedItemIndex {
-                        self.itemsAnimationDidStop()
-                    }
-                }
-                
-                item.expand(animated: animated, duration: duration)
-            })
-            
         }
+        
+        return center
     }
     
-    fileprivate func reduceContainers() {
-        let superview = self.superview ?? self
-        let baseOrigin = containerView.convert(button.frame.origin, to: superview)
-        let baseSize = button.frame.size
-        let frame = CGRect(origin: baseOrigin, size: baseSize)
-        let innerFrame = CGRect(origin: CGPoint(x: 0, y: 0), size: baseSize)
-        
-        backgroundView.frame = frame
-        backgroundView.isHidden = true
-        self.frame = frame
-        containerView.frame = innerFrame
-        button.frame = innerFrame
-        
-        items.forEach({ $0.center = button.center })
+    fileprivate func coveringBubbleDiameter(for center: CGPoint) -> CGFloat {
+        let maxOffsetX = max(center.x, self.frame.size.width - center.x)
+        let maxOffsetY = max(center.y, self.frame.size.width - center.y)
+        let radius = sqrt(pow(maxOffsetX, 2) + pow(maxOffsetY, 2))
+        return radius * 2
     }
+
     
-    fileprivate func reduceItems() {
-        
-        let lastAnimatedItemIndex: Int = itemsAnimationOrder == .progressiveInverse ? 0 : self.items.count - 1
-        
-        for (index, item) in self.items.enumerated() {
-            
-            let center = self.center(forItem: item, index: index, itemsPosition: itemsPosition, opening: false)
-            let duration = self.animationDuration
-            var delay = 0.0
-            
-            switch itemsAnimationOrder {
-            case .linear:
-                break
-            case .progressive:
-//                duration = Double(index+1) * animationDuration / Double(items.count)
-                delay = Double(index) * 0.2
-            case .progressiveInverse:
-//                duration = Double(items.count - index) * animationDuration / Double(items.count)
-                delay = Double(items.count - (index+1)) * 0.2
+//    fileprivate func move(item: UPActionButtonItem, to center: CGPoint, duration: TimeInterval, opening: Bool, bouncing: Bool) {
+//        let animation = CAKeyframeAnimation(keyPath: "position")
+//        
+//        let path = CGMutablePath()
+//        path.move(to: item.center)
+//        if bouncing {
+//            var bouncingOffset: CGFloat = itemsInterSpacing
+//            if itemsPosition == .up {
+//                bouncingOffset *= -1
+//            }
+//            if opening {
+//                path.addLine(to: CGPoint(x: center.x, y: center.y + bouncingOffset))
+//                path.addLine(to: CGPoint(x: center.x, y: center.y - (bouncingOffset / 2.0)))
+//            } else {
+//                path.addLine(to: CGPoint(x: item.center.x, y: item.center.y + bouncingOffset))
+//            }
+//        }
+//        path.addLine(to: center)
+//        animation.path = path
+//        
+//        animation.duration = duration
+//        animation.timingFunction = CAMediaTimingFunction(name: kCAMediaTimingFunctionEaseIn)
+//        animation.delegate = self
+//        item.layer.add(animation, forKey: "positionAnimation")
+//        
+//        item.center = center
+//    }
+    
+//    public func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
+//        itemAnimationDidStop()
+//    }
+    
+//    fileprivate func itemAnimationDidStop() {
+//        animatedItemTag += 1
+//        guard animatedItemTag >= items.count else { return }
+//        
+//        isOpen = !isOpen
+//        if isOpen {
+//            delegate?.actionButtonDidOpen?(self)
+//        }
+//        else {
+//            reduceContainers()
+//            delegate?.actionButtonDidClose?(self)
+//        }
+//        
+//        isAnimatingOpenClose = false
+//    }
+    
+    /* Animations */
+    
+    fileprivate func overlayAnimations(opening: Bool, type: UPActionButtonOverlayAnimationType) -> AnimationSteps {
+        return (preparation: {
+            switch type {
+            case .none: break
+            case .fade:
+                self.backgroundView.alpha = 0.0
+                self.backgroundView.frame = CGRect(origin: .zero, size: self.frame.size)
+            case .bubble:
+                let center = self.containerView.convert(self.button.center, to: self)
+                self.backgroundView.frame = CGRect(origin: .zero, size: CGSize(width: 1, height: 1))
+                self.backgroundView.center = center
+                self.backgroundView.layer.cornerRadius = self.backgroundView.frame.size.width / 2.0
+                self.backgroundView.alpha = 1.0
+                if !opening {
+                    let diameter = self.coveringBubbleDiameter(for: self.backgroundView.center)
+                    self.backgroundView.transform = CGAffineTransform(scaleX: diameter, y: diameter)
+                }
             }
-            
-            // TODO: adjust for bounce effect
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
-                
-                let animated = self.itemsAnimationType != .none
-                if animated {
-                    var damping: CGFloat = 1.0
-                    var velocity: CGFloat = 0.0
-                    if self.itemsAnimationType == .bounce {
-                        damping = 0.7
-                        velocity = -5.0
-                    }
-                    
-                    let animation = self.closeAnimations(forItem: item, to: center, type: self.itemsAnimationType)
-                    animation.preparation?()
-                    UIView.animate(withDuration: duration, delay: delay, usingSpringWithDamping: damping, initialSpringVelocity: velocity, options: .curveEaseInOut, animations: {
-                        animation.animation?()
-                    }) { (finished: Bool) in
-                        animation.completion?()
-                        if index == lastAnimatedItemIndex {
-                            self.itemsAnimationDidStop()
-                        }
-                    }
+        }, animation: {
+            switch type {
+            case .none: break
+            case .fade:
+                self.backgroundView.alpha = 1.0
+            case .bubble:
+                if opening {
+                    let diameter = self.coveringBubbleDiameter(for: self.backgroundView.center)
+                    self.backgroundView.transform = CGAffineTransform(scaleX: diameter, y: diameter)
                 } else {
-                    item.center = center
-                    item.alpha = 0.0
-                    if index == lastAnimatedItemIndex {
-                        self.itemsAnimationDidStop()
-                    }
+                    self.backgroundView.transform = CGAffineTransform.identity
                 }
-                
-                item.reduce(animated: animated, duration: duration)
-            })
-        }
-        
-        UIView.animate(withDuration: animationDuration, animations: {
-            self.backgroundView.alpha = 0.0
+            }
+        }, completion: {
+            if opening {
+                self.backgroundView.transform = CGAffineTransform.identity
+            } else {
+                self.backgroundView.isHidden = true
+            }
+            self.backgroundView.frame = CGRect(origin: .zero, size: self.frame.size)
+            self.backgroundView.layer.cornerRadius = 0
         })
     }
     
     
     fileprivate func openAnimations(forItem item: UPActionButtonItem, to: CGPoint, type: UPActionButtonItemsAnimationType) -> AnimationSteps {
-        
         let translationOffset: CGFloat = 20.0
         let scaleOffset: CGFloat = 0.5
         
@@ -742,9 +921,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         }, completion: nil)
     }
     
-    
     fileprivate func closeAnimations(forItem item: UPActionButtonItem, to: CGPoint, type: UPActionButtonItemsAnimationType) -> AnimationSteps {
-        
         let translationOffset: CGFloat = 20.0
         let scaleOffset: CGFloat = 0.5
         
@@ -782,95 +959,52 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         })
     }
     
-    fileprivate func center(forItem item: UPActionButtonItem, index: Int, itemsPosition position: UPActionButtonItemsPosition, opening: Bool) -> CGPoint {
-        var center = button.center
-        
-        if (opening) {
-            let buttonFrame = button.frame
-            let itemSize = item.frame.size
-            let itemOffset = (itemSize.height + self.itemsInterSpacing) * CGFloat(index + 1)
-            
-            switch position {
-            case .up:
-                center.y = buttonFrame.origin.y - itemOffset + itemSize.height / 2
-            case .down:
-                center.y = buttonFrame.origin.y + buttonFrame.size.height + itemOffset - itemSize.height / 2
-            }
-        }
-        
-        return center
-    }
-
-    
-//    fileprivate func move(item: UPActionButtonItem, to center: CGPoint, duration: TimeInterval, opening: Bool, bouncing: Bool) {
-//        let animation = CAKeyframeAnimation(keyPath: "position")
-//        
-//        let path = CGMutablePath()
-//        path.move(to: item.center)
-//        if bouncing {
-//            var bouncingOffset: CGFloat = itemsInterSpacing
-//            if itemsPosition == .up {
-//                bouncingOffset *= -1
-//            }
-//            if opening {
-//                path.addLine(to: CGPoint(x: center.x, y: center.y + bouncingOffset))
-//                path.addLine(to: CGPoint(x: center.x, y: center.y - (bouncingOffset / 2.0)))
-//            } else {
-//                path.addLine(to: CGPoint(x: item.center.x, y: item.center.y + bouncingOffset))
-//            }
-//        }
-//        path.addLine(to: center)
-//        animation.path = path
-//        
-//        animation.duration = duration
-//        animation.timingFunction = CAMediaTimingFunction(name: kCAMediaTimingFunctionEaseIn)
-//        animation.delegate = self
-//        item.layer.add(animation, forKey: "positionAnimation")
-//        
-//        item.center = center
-//    }
-    
-//    public func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
-//        itemAnimationDidStop()
-//    }
-    
-    fileprivate func itemAnimationDidStop() {
-        animatedItemTag += 1
-        guard animatedItemTag >= items.count else { return }
-        
-        isOpen = !isOpen
-        if isOpen {
-            delegate?.actionButtonDidOpen?(self)
-        }
-        else {
-            reduceContainers()
-            delegate?.actionButtonDidClose?(self)
-        }
-        
-        isAnimatingOpenClose = false
-    }
-    
-    fileprivate func itemsAnimationDidStop() {
-        isOpen = !isOpen
-        if isOpen {
-            delegate?.actionButtonDidOpen?(self)
-        }
-        else {
-            reduceContainers()
-            delegate?.actionButtonDidClose?(self)
-        }
-        
-        isAnimatingOpenClose = false
-    }
-    
 }
 
 
 // MARK: - Private Helpers (Button)
 extension UPActionButton {
     
-    fileprivate func appearAnimations(type: UPActionButtonDisplayAnimationType) -> AnimationSteps {
+    fileprivate func handleInteractiveScroll(from scrollView: UIScrollView) {
+        let scrollCurrentOffset = scrollView.contentOffset.y
         
+        let scrollableSize = scrollView.contentSize.height - scrollView.frame.size.height
+        guard scrollCurrentOffset >= 0 && scrollCurrentOffset <= scrollableSize else { return }
+        
+        let scrolledDistance = scrollLastOffset - scrollCurrentOffset
+        let direction: ScrollDirection = scrolledDistance < 0 ? .down : scrolledDistance > 0 ? .up : .none
+        if direction != .none {
+            if direction != scrollCurrentDirection {
+                scrollCurrentDirection = direction
+                scrollStartOffset = scrollCurrentOffset
+            }
+            else {
+                if (scrollCurrentDirection == .down && !self.isHidden) || (scrollCurrentDirection == .up && self.isHidden) {
+                    let totalScrolledDistance = scrollStartOffset - scrollCurrentOffset
+                    if fabsf(Float(totalScrolledDistance)) > Float(interactiveScrollDistance) {
+                        switch scrollCurrentDirection {
+                        case .down:
+                            hide()
+                        case .up:
+                            show()
+                        default: break
+                        }
+                    }
+                        // Show the button right away when scrolling up from the bottom of the scrollview
+                    else if scrollCurrentDirection == .up && scrollLastOffset > scrollableSize - 10 {
+                        show()
+                    }
+                }
+            }
+        }
+        
+        scrollLastOffset = scrollCurrentOffset
+    }
+    
+    
+    /* Animations */
+    
+    fileprivate func appearAnimations(type: UPActionButtonDisplayAnimationType) -> AnimationSteps {
         let initialContainerFrame = containerView.frame
         let translationOffset: CGFloat = 20.0
         let scaleOffset: CGFloat = 0.5
@@ -907,7 +1041,6 @@ extension UPActionButton {
     }
     
     fileprivate func disappearAnimations(type: UPActionButtonDisplayAnimationType) -> AnimationSteps {
-        
         let initialContainerFrame = containerView.frame
         let translationOffset: CGFloat = 20.0
         let scaleOffset: CGFloat = 0.5
@@ -985,42 +1118,6 @@ extension UPActionButton {
                 self.closedTitleImageView.isHidden = !opening
             })
         }
-    }
-    
-    fileprivate func handleInteractiveScroll(from scrollView: UIScrollView) {
-        let scrollCurrentOffset = scrollView.contentOffset.y
-        
-        let scrollableSize = scrollView.contentSize.height - scrollView.frame.size.height
-        guard scrollCurrentOffset >= 0 && scrollCurrentOffset <= scrollableSize else { return }
-        
-        let scrolledDistance = scrollLastOffset - scrollCurrentOffset
-        let direction: ScrollDirection = scrolledDistance < 0 ? .down : scrolledDistance > 0 ? .up : .none
-        if direction != .none {
-            if direction != scrollCurrentDirection {
-                scrollCurrentDirection = direction
-                scrollStartOffset = scrollCurrentOffset
-            }
-            else {
-                if (scrollCurrentDirection == .down && !self.isHidden) || (scrollCurrentDirection == .up && self.isHidden) {
-                    let totalScrolledDistance = scrollStartOffset - scrollCurrentOffset
-                    if fabsf(Float(totalScrolledDistance)) > Float(interactiveScrollDistance) {
-                        switch scrollCurrentDirection {
-                        case .down:
-                            hide()
-                        case .up:
-                            show()
-                        default: break
-                        }
-                    }
-                        // Show the button right away when scrolling up from the bottom of the scrollview
-                    else if scrollCurrentDirection == .up && scrollLastOffset > scrollableSize - 10 {
-                        show()
-                    }
-                }
-            }
-        }
-        
-        scrollLastOffset = scrollCurrentOffset
     }
     
 }
