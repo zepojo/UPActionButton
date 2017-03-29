@@ -24,7 +24,7 @@ public enum UPActionButtonDisplayAnimationType {
 
 public enum UPActionButtonTransitionType {
     case none
-    case rotate(CGFloat)
+    case rotate(degrees: CGFloat)
     case crossDissolveImage(UIImage)
     case crossDissolveText(String)
 }
@@ -180,7 +180,7 @@ open class UPActionButton: UIView {
             closedTitleLabel.textColor = newValue
         }
     }
-    public var font: UIFont {
+    public var titleFont: UIFont {
         get { return openTitleLabel.font }
         set {
             openTitleLabel.font = newValue
@@ -248,7 +248,7 @@ open class UPActionButton: UIView {
         openTitleLabel = UILabel()
         closedTitleLabel = UILabel()
         [openTitleLabel, closedTitleLabel].forEach { (label: UILabel) in
-            label.frame = innerFrame.insetBy(dx: 10, dy: 10)
+            label.frame = innerFrame
             label.alpha = 0.0
             label.isHidden = true
             label.textAlignment = .center
@@ -258,12 +258,14 @@ open class UPActionButton: UIView {
         openTitleImageView = UIImageView()
         closedTitleImageView = UIImageView()
         [openTitleImageView, closedTitleImageView].forEach { (image: UIImageView!) in
-            image.frame = innerFrame.insetBy(dx: 10, dy: 10)
+            image.frame = innerFrame
             image.alpha = 0.0
             image.isHidden = true
             image.contentMode = .scaleAspectFill
             button.addSubview(image)
         }
+        
+        self.setTitleInset(dx: 10, dy: 10)
         
         if let image = image {
             self.image = image
@@ -336,6 +338,20 @@ extension UPActionButton {
         button.layer.shadowOpacity = opacity
         button.layer.shadowRadius = radius
         button.layer.shadowOffset = offset
+    }
+    
+    open func setTitleTextOffset(_ offset: CGPoint) {
+        [openTitleLabel, closedTitleLabel].forEach { (label: UIView) in
+            var anchorPoint = CGPoint(x: 0.5, y: 0.5)
+            anchorPoint.x += offset.x / label.frame.size.width
+            anchorPoint.y += offset.y / label.frame.size.height
+            label.layer.anchorPoint = anchorPoint
+        }
+    }
+    open func setTitleInset(dx: CGFloat, dy: CGFloat) {
+        [openTitleLabel, closedTitleLabel, openTitleImageView, closedTitleImageView].forEach { (view: UIView) in
+            view.frame = self.button.frame.insetBy(dx: dx, dy: dy)
+        }
     }
     
     
@@ -1096,10 +1112,11 @@ extension UPActionButton {
         switch buttonTransitionType {
         case .none: break
             
-        case .rotate(let angle):
+        case .rotate(let degrees):
             guard let titleView = self.visibleOpenTitleView else { return }
+            let radians = degrees * .pi / 180
             UIView.animate(withDuration: duration, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 5.0, options: .curveEaseInOut, animations: {
-                titleView.transform = opening ? CGAffineTransform(rotationAngle: angle) : CGAffineTransform.identity
+                titleView.transform = opening ? CGAffineTransform(rotationAngle: radians) : CGAffineTransform.identity
             }, completion: nil)
             
         case .crossDissolveText(let title):

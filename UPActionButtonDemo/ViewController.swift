@@ -33,9 +33,10 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
     
     fileprivate func createActionButton() -> UPActionButton {
         let button = UPActionButton(frame: CGRect(x: 200, y: 200, width: 60, height: 60), image: nil, title: "+")
-        button.buttonTransitionType = .rotate(2.35)
+        button.buttonTransitionType = .rotate(degrees: 135)
         button.titleColor = UIColor.white
-        button.font = UIFont.systemFont(ofSize: 40)
+        button.titleFont = UIFont.systemFont(ofSize: 40)
+        button.setTitleTextOffset(CGPoint(x: 0, y: 3))
         button.color = UIColor.blue
         button.cornerRadius = 30.0
         button.setShadow(color: .black, opacity: 0.5, radius: 3.0, offset: CGSize(width: 0, height: 2))
@@ -48,6 +49,7 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
         button.interactiveScrollView = self.tableView
         button.itemsAnimationType = .scaleDown
         button.itemsAnimationOrder = .progressive
+        button.animationDuration = 0.3
         button.delegate = self
         
         var items = [UPActionButtonItem]()
