@@ -40,6 +40,9 @@ open class UPActionButtonItem: UIView {
     
     fileprivate var titleContainerSize: CGSize {
         let titleLabelSize = self.titleLabelSize
+        guard titleLabelSize != .zero else {
+            return .zero
+        }
         return CGSize(width: titleLabelSize.width + titleInsets.left * 2, height: titleLabelSize.height + titleInsets.top * 2)
     }
     
@@ -93,7 +96,7 @@ open class UPActionButtonItem: UIView {
     
     
     // MARK: - Initialization
-    public init(title: String, buttonImage: UIImage?, buttonText: String?, action: (() -> Void)?) {
+    public init(title: String?, buttonImage: UIImage?, buttonText: String?, action: (() -> Void)?) {
         super.init(frame: .zero)
         
         titleContainer = UIView()
@@ -252,9 +255,14 @@ extension UPActionButtonItem {
             titleContainer.center = CGPoint(x: self.frame.size.width - titleSize.width/2.0, y: self.frame.size.height/2.0)
         }
         
-        let horizontalRatio: CGFloat = button.center.x / self.frame.size.width
-        let verticalRatio: CGFloat = button.center.y / self.frame.size.height
-        self.layer.anchorPoint = CGPoint(x: horizontalRatio, y: verticalRatio)
+        var anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        if self.frame.size.width > 0 {
+            anchorPoint.x = button.center.x / self.frame.size.width
+        }
+        if self.frame.size.height > 0 {
+            anchorPoint.y = button.center.y / self.frame.size.height
+        }
+        self.layer.anchorPoint = anchorPoint
         
         if isExpanded {
             isExpanded = false
