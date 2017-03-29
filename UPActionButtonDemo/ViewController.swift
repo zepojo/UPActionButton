@@ -18,6 +18,8 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
         
         self.title = "Action Button"
         
+        self.tableView.register(UINib(nibName: "DemoTableViewCell", bundle: nil), forCellReuseIdentifier: "DemoTableViewCell")
+        
         actionButton = createActionButton()
     }
     
@@ -28,7 +30,7 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
         buttonFrame.origin.x = self.view.frame.size.width - buttonFrame.size.width - 20
         buttonFrame.origin.y = self.view.frame.size.height - buttonFrame.size.height - 20
         actionButton.frame = buttonFrame
-        tableView.addSubview(actionButton)
+        self.navigationController?.view.addSubview(actionButton)
     }
     
     fileprivate func createActionButton() -> UPActionButton {
@@ -43,11 +45,11 @@ class ViewController: UITableViewController, UPActionButtonDelegate {
         button.showAnimationType = .scaleUp
         button.hideAnimationType = .scaleDown
         button.overlayType = .plain(UIColor(white: 0.0, alpha: 0.3))
-        button.overlayAnimationType = .bubble
+        button.overlayAnimationType = .fade
         button.itemSize = CGSize(width: 40, height: 40)
         button.floating = true
         button.interactiveScrollView = self.tableView
-        button.itemsAnimationType = .scaleDown
+        button.itemsAnimationType = .bounce
         button.itemsAnimationOrder = .progressive
         button.animationDuration = 0.3
         button.delegate = self
@@ -111,10 +113,14 @@ extension ViewController {
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "UPActionButtonDemoCell", for: indexPath)
-        cell.textLabel?.text = "Cell \(indexPath.row)"
-        cell.backgroundColor = .red
+        let cell = tableView.dequeueReusableCell(withIdentifier: "DemoTableViewCell", for: indexPath) as! DemoTableViewCell
+//        cell.textLabel?.text = "Cell \(indexPath.row)"
+//        cell.backgroundColor = .red
         return cell
+    }
+    
+    override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return 95
     }
     
 }

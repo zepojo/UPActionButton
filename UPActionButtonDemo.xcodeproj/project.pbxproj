@@ -14,6 +14,8 @@
 		01CE4E821E65C9F100D3ECA2 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 01CE4E801E65C9F100D3ECA2 /* LaunchScreen.storyboard */; };
 		01CE4E8B1E65CA9700D3ECA2 /* UPActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CE4E8A1E65CA9700D3ECA2 /* UPActionButton.swift */; };
 		01CE4E8D1E65CAA200D3ECA2 /* UPActionButtonItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CE4E8C1E65CAA200D3ECA2 /* UPActionButtonItem.swift */; };
+		01DDE0B51E8C168C00C7DBD4 /* DemoTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01DDE0B31E8C168C00C7DBD4 /* DemoTableViewCell.swift */; };
+		01DDE0B61E8C168C00C7DBD4 /* DemoTableViewCell.xib in Resources */ = {isa = PBXBuildFile; fileRef = 01DDE0B41E8C168C00C7DBD4 /* DemoTableViewCell.xib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +28,8 @@
 		01CE4E831E65C9F100D3ECA2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		01CE4E8A1E65CA9700D3ECA2 /* UPActionButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UPActionButton.swift; sourceTree = "<group>"; };
 		01CE4E8C1E65CAA200D3ECA2 /* UPActionButtonItem.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UPActionButtonItem.swift; sourceTree = "<group>"; };
+		01DDE0B31E8C168C00C7DBD4 /* DemoTableViewCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DemoTableViewCell.swift; sourceTree = "<group>"; };
+		01DDE0B41E8C168C00C7DBD4 /* DemoTableViewCell.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = DemoTableViewCell.xib; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,6 +65,8 @@
 				01CE4E891E65CA8C00D3ECA2 /* UPActionButton */,
 				01CE4E771E65C9F100D3ECA2 /* AppDelegate.swift */,
 				01CE4E791E65C9F100D3ECA2 /* ViewController.swift */,
+				01DDE0B31E8C168C00C7DBD4 /* DemoTableViewCell.swift */,
+				01DDE0B41E8C168C00C7DBD4 /* DemoTableViewCell.xib */,
 				01CE4E7B1E65C9F100D3ECA2 /* Main.storyboard */,
 				01CE4E7E1E65C9F100D3ECA2 /* Assets.xcassets */,
 				01CE4E801E65C9F100D3ECA2 /* LaunchScreen.storyboard */,
@@ -139,6 +145,7 @@
 			files = (
 				01CE4E821E65C9F100D3ECA2 /* LaunchScreen.storyboard in Resources */,
 				01CE4E7F1E65C9F100D3ECA2 /* Assets.xcassets in Resources */,
+				01DDE0B61E8C168C00C7DBD4 /* DemoTableViewCell.xib in Resources */,
 				01CE4E7D1E65C9F100D3ECA2 /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -153,6 +160,7 @@
 				01CE4E8B1E65CA9700D3ECA2 /* UPActionButton.swift in Sources */,
 				01CE4E8D1E65CAA200D3ECA2 /* UPActionButtonItem.swift in Sources */,
 				01CE4E7A1E65C9F100D3ECA2 /* ViewController.swift in Sources */,
+				01DDE0B51E8C168C00C7DBD4 /* DemoTableViewCell.swift in Sources */,
 				01CE4E781E65C9F100D3ECA2 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
