@@ -329,6 +329,61 @@ open class UPActionButton: UIView {
 // MARK: - Public API
 extension UPActionButton {
     
+    /* Customization */
+    
+    open func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
+        button.layer.shadowColor = color.cgColor
+        button.layer.shadowOpacity = opacity
+        button.layer.shadowRadius = radius
+        button.layer.shadowOffset = offset
+    }
+    
+    
+    /* Display */
+    
+    open func show(animated: Bool = true) {
+        guard isHidden && !isAnimatingShowHide else { return }
+        
+        if showAnimationType == .none || !animated {
+            self.isHidden = false
+            return
+        }
+        
+        let animation = appearAnimations(type: showAnimationType)
+        
+        isAnimatingShowHide = true
+        
+        animation.preparation?()
+        UIView.animate(withDuration: 0.3, delay: 0.0, options: .curveEaseInOut, animations: {
+            animation.animation?()
+        }) { (finished: Bool) in
+            animation.completion?()
+            self.isAnimatingShowHide = false
+        }
+    }
+    
+    open func hide(animated: Bool = true) {
+        guard !isHidden && !isAnimatingShowHide else { return }
+        
+        if showAnimationType == .none || !animated {
+            self.isHidden = true
+            return
+        }
+        
+        let animation = disappearAnimations(type: hideAnimationType)
+        
+        isAnimatingShowHide = true
+        
+        animation.preparation?()
+        UIView.animate(withDuration: 0.3, delay: 0.0, options: .curveEaseInOut, animations: {
+            animation.animation?()
+        }) { (finished: Bool) in
+            animation.completion?()
+            self.isAnimatingShowHide = false
+        }
+    }
+    
+    
     /* Items management */
     
     open func add(item: UPActionButtonItem) {
@@ -391,61 +446,6 @@ extension UPActionButton {
         reduceOverlay()
         reduceItems()
         transitionButtonTitle()
-    }
-    
-    
-    /* Display */
-    
-    open func show(animated: Bool = true) {
-        guard isHidden && !isAnimatingShowHide else { return }
-        
-        if showAnimationType == .none || !animated {
-            self.isHidden = false
-            return
-        }
-        
-        let animation = appearAnimations(type: showAnimationType)
-        
-        isAnimatingShowHide = true
-        
-        animation.preparation?()
-        UIView.animate(withDuration: 0.3, delay: 0.0, options: .curveEaseInOut, animations: {
-            animation.animation?()
-        }) { (finished: Bool) in
-            animation.completion?()
-            self.isAnimatingShowHide = false
-        }
-    }
-    
-    open func hide(animated: Bool = true) {
-        guard !isHidden && !isAnimatingShowHide else { return }
-        
-        if showAnimationType == .none || !animated {
-            self.isHidden = true
-            return
-        }
-        
-        let animation = disappearAnimations(type: hideAnimationType)
-        
-        isAnimatingShowHide = true
-        
-        animation.preparation?()
-        UIView.animate(withDuration: 0.3, delay: 0.0, options: .curveEaseInOut, animations: {
-            animation.animation?()
-        }) { (finished: Bool) in
-            animation.completion?()
-            self.isAnimatingShowHide = false
-        }
-    }
-    
-    
-    /* Customization */
-    
-    open func setShadow(color: UIColor, opacity: Float, radius: CGFloat, offset: CGSize) {
-        button.layer.shadowColor = color.cgColor
-        button.layer.shadowOpacity = opacity
-        button.layer.shadowRadius = radius
-        button.layer.shadowOffset = offset
     }
     
     
@@ -559,6 +559,9 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                 animation.animation?()
             }, completion: { (finished: Bool) in
                 animation.completion?()
+                if self.itemsAnimationType == .none {
+                    self.openAnimationDidStop()
+                }
             })
         } else {
             backgroundView.frame = CGRect(origin: .zero, size: self.frame.size)
@@ -605,14 +608,14 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                     }) { (finished: Bool) in
                         animation.completion?()
                         if index == lastAnimatedItemIndex {
-                            self.itemsAnimationDidStop()
+                            self.openAnimationDidStop()
                         }
                     }
                 } else {
                     item.center = center
                     item.alpha = 1.0
-                    if index == lastAnimatedItemIndex {
-                        self.itemsAnimationDidStop()
+                    if self.overlayAnimationType == .none && index == lastAnimatedItemIndex {
+                        self.openAnimationDidStop()
                     }
                 }
                 
@@ -646,6 +649,9 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                 animation.animation?()
             }, completion: { (finished: Bool) in
                 animation.completion?()
+                if self.itemsAnimationType == .none {
+                    self.closeAnimationDidStop()
+                }
             })
         } else {
             self.backgroundView.frame = CGRect(origin: .zero, size: self.frame.size)
@@ -694,14 +700,14 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                     }) { (finished: Bool) in
                         animation.completion?()
                         if index == lastAnimatedItemIndex {
-                            self.itemsAnimationDidStop()
+                            self.closeAnimationDidStop()
                         }
                     }
                 } else {
                     item.center = center
                     item.alpha = 0.0
-                    if index == lastAnimatedItemIndex {
-                        self.itemsAnimationDidStop()
+                    if self.overlayAnimationType == .none && index == lastAnimatedItemIndex {
+                        self.closeAnimationDidStop()
                     }
                 }
                 
@@ -711,15 +717,21 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
     }
     
     
-    fileprivate func itemsAnimationDidStop() {
-        isOpen = !isOpen
-        if isOpen {
-            delegate?.actionButtonDidOpen?(self)
-        }
-        else {
-            reduceContainers()
-            delegate?.actionButtonDidClose?(self)
-        }
+    fileprivate func openAnimationDidStop() {
+        guard !isOpen else { return }
+        
+        isOpen = true
+        delegate?.actionButtonDidOpen?(self)
+        
+        isAnimatingOpenClose = false
+    }
+    
+    fileprivate func closeAnimationDidStop() {
+        guard isOpen else { return }
+        
+        isOpen = false
+        reduceContainers()
+        delegate?.actionButtonDidClose?(self)
         
         isAnimatingOpenClose = false
     }
