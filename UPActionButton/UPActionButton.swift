@@ -232,12 +232,14 @@ open class UPActionButton: UIView {
         
         backgroundView = UIVisualEffectView(frame: innerFrame)
         backgroundView.isHidden = true
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(toggle))
-        backgroundView.addGestureRecognizer(tapGesture)
+        let backgroundTapGesture = UITapGestureRecognizer(target: self, action: #selector(toggle))
+        backgroundView.addGestureRecognizer(backgroundTapGesture)
         self.addSubview(backgroundView)
         
         containerView = UIView(frame: innerFrame)
         //        containerView.clipsToBounds = true
+        let containerTapGesture = UITapGestureRecognizer(target: self, action: #selector(toggle))
+        containerView.addGestureRecognizer(containerTapGesture)
         self.addSubview(containerView)
         
         button = UIButton(type: .custom)
@@ -598,23 +600,27 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
             case .linear:
                 break
             case .progressive:
-                //                duration = Double(index+1) * animationDuration / Double(items.count)
-                delay = Double(index) * 0.2
+                delay = Double(index) * 0.02
             case .progressiveInverse:
-                //                duration = Double(items.count - index) * animationDuration / Double(items.count)
-                delay = Double(items.count - (index+1)) * 0.2
+                delay = Double(items.count - (index+1)) * 0.02
             }
             
-            // TODO: adjust for bounce effect
-            
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
-                
                 let animated = self.itemsAnimationType != .none
+                
+                item.expand(animated: animated, duration: duration)
+                
                 if animated {
                     var damping: CGFloat = 1.0
                     if self.itemsAnimationType == .bounce {
                         damping = 0.7
-                        duration = Double(index) * self.animationDuration / Double(self.items.count) + self.animationDuration
+                        var durationOffset: TimeInterval = 0
+                        if self.itemsAnimationOrder == .progressive {
+                            durationOffset = Double(index) * duration / Double(self.items.count)
+                        } else if self.itemsAnimationOrder == .progressiveInverse {
+                            durationOffset = Double(self.items.count - index) * duration / Double(self.items.count)
+                        }
+                        duration += durationOffset
                     }
                     
                     let animation = self.openAnimations(forItem: item, to: center, type: self.itemsAnimationType)
@@ -634,10 +640,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                         self.openAnimationDidStop()
                     }
                 }
-                
-                item.expand(animated: animated, duration: duration)
             })
-            
         }
     }
     
@@ -682,31 +685,38 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         for (index, item) in self.items.enumerated() {
             
             let center = self.center(forItem: item, index: index, itemsPosition: itemsPosition, opening: false)
-            let duration = self.animationDuration
+            var duration = self.animationDuration
             var delay = 0.0
             
             switch itemsAnimationOrder {
             case .linear:
                 break
             case .progressive:
-                //                duration = Double(index+1) * animationDuration / Double(items.count)
-                delay = Double(index) * 0.2
+                    delay = Double(index) * 0.02
             case .progressiveInverse:
-                //                duration = Double(items.count - index) * animationDuration / Double(items.count)
-                delay = Double(items.count - (index+1)) * 0.2
+                    delay = Double(items.count - (index+1)) * 0.02
             }
             
-            // TODO: adjust for bounce effect
-            
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
-                
                 let animated = self.itemsAnimationType != .none
+                
+                item.reduce(animated: animated, duration: duration)
+                
                 if animated {
                     var damping: CGFloat = 1.0
                     var velocity: CGFloat = 0.0
                     if self.itemsAnimationType == .bounce {
-                        damping = 0.7
-                        velocity = -5.0
+                        damping = 1.0
+                        velocity = -5
+                        
+                        var durationOffset: TimeInterval = 0
+                        if self.itemsAnimationOrder == .progressive {
+                            durationOffset = Double(index) * duration / Double(self.items.count)
+                        } else if self.itemsAnimationOrder == .progressiveInverse {
+                            durationOffset = Double(self.items.count - index) * duration / Double(self.items.count)
+                        }
+                        duration += durationOffset
+                        duration *= 2
                     }
                     
                     let animation = self.closeAnimations(forItem: item, to: center, type: self.itemsAnimationType)
@@ -726,8 +736,6 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                         self.closeAnimationDidStop()
                     }
                 }
-                
-                item.reduce(animated: animated, duration: duration)
             })
         }
     }
@@ -875,7 +883,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
             switch type {
             case .none: break
             case .fade:
-                self.backgroundView.alpha = 0.0
+                self.backgroundView.alpha = opening ? 0.0 : 1.0
                 self.backgroundView.frame = CGRect(origin: .zero, size: self.frame.size)
             case .bubble:
                 let center = self.containerView.convert(self.button.center, to: self)
@@ -892,7 +900,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
             switch type {
             case .none: break
             case .fade:
-                self.backgroundView.alpha = 1.0
+                self.backgroundView.alpha = opening ? 1.0 : 0.0
             case .bubble:
                 if opening {
                     let diameter = self.coveringBubbleDiameter(for: self.backgroundView.center)
