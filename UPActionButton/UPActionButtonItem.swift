@@ -37,7 +37,6 @@ open class UPActionButtonItem: UIView {
         }
         return (title as NSString).size(attributes: [NSFontAttributeName: titleLabel.font])
     }
-    
     fileprivate var titleContainerSize: CGSize {
         let titleLabelSize = self.titleLabelSize
         guard titleLabelSize != .zero else {
@@ -46,29 +45,12 @@ open class UPActionButtonItem: UIView {
         return CGSize(width: titleLabelSize.width + titleInsets.left * 2, height: titleLabelSize.height + titleInsets.top * 2)
     }
     
-    public var size: CGSize = .zero {
-        didSet {
-            updateElementsSizes()
-            layoutElements()
-        }
-    }
-    public var titleInsets = UIEdgeInsets(top: 2.0, left: 5.0, bottom: 2.0, right: 5.0) {
-        didSet {
-            updateElementsSizes()
-            layoutElements()
-        }
-    }
-    
     public var delegate: UPActionButtonItemDelegate?
     
     /* Customization */
-    public var titlePosition: UPActionButtonItemTitlePosition = .left {
-        didSet {
-            layoutElements()
-        }
-    }
     public var internMargin: CGFloat = 5.0
     public var closeOnTap: Bool = true
+    // Button
     public var color: UIColor? {
         get { return button.backgroundColor }
         set { button.backgroundColor = newValue }
@@ -76,6 +58,18 @@ open class UPActionButtonItem: UIView {
     public var cornerRadius: CGFloat {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
+    }
+    public var size: CGSize = .zero {
+        didSet {
+            updateElementsSizes()
+            layoutElements()
+        }
+    }
+    // Title
+    public var titlePosition: UPActionButtonItemTitlePosition = .left {
+        didSet {
+            layoutElements()
+        }
     }
     public var titleColor: UIColor {
         get { return titleLabel.textColor }
@@ -92,6 +86,12 @@ open class UPActionButtonItem: UIView {
     public var titleCornerRadius: CGFloat {
         get { return titleContainer.layer.cornerRadius }
         set { titleContainer.layer.cornerRadius = newValue }
+    }
+    public var titleInsets = UIEdgeInsets(top: 2.0, left: 5.0, bottom: 2.0, right: 5.0) {
+        didSet {
+            updateElementsSizes()
+            layoutElements()
+        }
     }
     
     
@@ -124,16 +124,29 @@ open class UPActionButtonItem: UIView {
         self.addSubview(tapButton)
         
         self.action = action
+        
+        setDefaultConfiguration()
     }
     
     required public init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        fatalError("[UPActionButton] UPActionButtonItem can't be created from a nib")
     }
     
     deinit {
         tapButton.removeObserver(self, forKeyPath: "highlighted")
     }
     
+    
+    // MARK: - UI Elements Setup
+    
+    func setDefaultConfiguration() {
+        color = .blue
+        internMargin = 5.0
+        titlePosition = .left
+        titleColor = .white
+        titleBackgroundColor = UIColor(white: 0.0, alpha: 0.7)
+        titleCornerRadius = 4.0
+    }
 }
 
 
@@ -239,7 +252,6 @@ extension UPActionButtonItem {
         titleContainer.frame = CGRect(origin: .zero, size: titleSize)
         titleLabel.frame = CGRect(origin: CGPoint(x: titleInsets.left, y: titleInsets.top), size: titleLabelSize)
         button.frame = CGRect(origin: .zero, size: size)
-        button.layer.cornerRadius = min(size.width, size.height) / 2.0
     }
     
     fileprivate func layoutElements() {

@@ -88,11 +88,11 @@ open class UPActionButton: UIView {
     fileprivate var containerOpenSize: CGSize = .zero
     fileprivate var buttonOpenCenter: CGPoint = .zero
     fileprivate var isAnimatingOpenClose = false
-    fileprivate var animatedItemTag: Int = 0
-    
     fileprivate var isAnimatingShowHide = false
     
-    fileprivate let superviewBoundsKeyPath = "layer.bounds"
+    fileprivate let slideAnimationOffset: CGFloat = 20.0
+    fileprivate let scaleAnimationOffset: CGFloat = 0.5
+    
     fileprivate var observesSuperviewBounds = false
     fileprivate var observesSuperviewContentOffset = false
     fileprivate var observesInteractiveScrollView = false
@@ -103,10 +103,11 @@ open class UPActionButton: UIView {
     fileprivate let interactiveScrollDistance: CGFloat = 64.0
     
     fileprivate(set) var items = [UPActionButtonItem]()
+    fileprivate(set) var isOpen = false
     
     public var delegate: UPActionButtonDelegate?
-    
-    public var interactiveScrollView: UIScrollView? {
+
+    @IBOutlet public var interactiveScrollView: UIScrollView? {
         didSet {
             if let scrollView = oldValue, observesInteractiveScrollView {
                 scrollView.removeObserver(self, forKeyPath: "contentOffset")
@@ -118,11 +119,7 @@ open class UPActionButton: UIView {
             }
         }
     }
-    
-    public var isOpen = false
-    
-    /* Customization */
-    public var floating: Bool = false {
+    @IBInspectable public var floating: Bool = false {
         didSet {
             if !floating && observesSuperviewContentOffset {
                 self.superview?.removeObserver(self, forKeyPath: "contentOffset")
@@ -134,46 +131,34 @@ open class UPActionButton: UIView {
             }
         }
     }
-    public var itemsPosition: UPActionButtonItemsPosition = .up {
-        didSet {
-            computeOpenSize()
-        }
-    }
-    public var itemSize: CGSize = CGSize(width: 30, height: 30) {
-        didSet {
-            items.forEach({ $0.size = itemSize })
-        }
-    }
-    public var itemsInterSpacing: CGFloat = 10.0 {
-        didSet {
-            computeOpenSize()
-        }
-    }
-    public var itemsAnimationType: UPActionButtonItemsAnimationType = .none
-    public var itemsAnimationOrder: UPActionButtonItemsAnimationOrder = .linear
-    public var animationDuration: TimeInterval = 1.0
+    
+    /* Customization */
+    public var animationDuration: TimeInterval = 0.4
+    // Button
     public var showAnimationType: UPActionButtonDisplayAnimationType = .none
     public var hideAnimationType: UPActionButtonDisplayAnimationType = .none
     public var buttonTransitionType: UPActionButtonTransitionType = .none
-    public var image: UIImage? {
+    @IBInspectable public var image: UIImage? {
         get { return openTitleImageView.image }
         set {
             openTitleImageView.image = newValue
             openTitleImageView.isHidden = false
+            openTitleImageView.alpha = 1.0
             openTitleLabel.text = nil
             openTitleLabel.isHidden = true
         }
     }
-    public var title: String? {
+    @IBInspectable public var title: String? {
         get { return openTitleLabel.text }
         set {
             openTitleLabel.text = newValue
             openTitleLabel.isHidden = false
+            openTitleLabel.alpha = 1.0
             openTitleImageView.image = nil
             openTitleImageView.isHidden = true
         }
     }
-    public var titleColor: UIColor {
+    @IBInspectable public var titleColor: UIColor {
         get { return openTitleLabel.textColor }
         set {
             openTitleLabel.textColor = newValue
@@ -187,14 +172,15 @@ open class UPActionButton: UIView {
             closedTitleLabel.font = newValue
         }
     }
-    public var color: UIColor? {
+    @IBInspectable public var color: UIColor? {
         get { return button.backgroundColor }
         set { button.backgroundColor = newValue }
     }
-    public var cornerRadius: CGFloat {
+    @IBInspectable public var cornerRadius: CGFloat {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
     }
+    // Overlay
     public var overlayType: UPActionButtonOverlayType? {
         didSet {
             let type: UPActionButtonOverlayType = overlayType ?? .plain(.clear)
@@ -210,6 +196,7 @@ open class UPActionButton: UIView {
                 }
                 backgroundView.backgroundColor = .clear
                 backgroundView.effect = visualEffect
+                print(backgroundView)
             }
         }
     }
@@ -222,13 +209,99 @@ open class UPActionButton: UIView {
             }
         }
     }
+    // Items
+    public var itemsPosition: UPActionButtonItemsPosition = .up {
+        didSet {
+            computeOpenSize()
+        }
+    }
+    @IBInspectable public var itemSize: CGSize = CGSize(width: 30, height: 30) {
+        didSet {
+            items.forEach({ $0.size = itemSize })
+        }
+    }
+    @IBInspectable public var itemsInterSpacing: CGFloat = 10.0 {
+        didSet {
+            computeOpenSize()
+        }
+    }
+    public var itemsAnimationType: UPActionButtonItemsAnimationType = .none
+    public var itemsAnimationOrder: UPActionButtonItemsAnimationOrder = .linear
     
     
     // MARK: - Initialization
+    
     public init(frame: CGRect, image: UIImage?, title: String?) {
         super.init(frame: frame)
         
-        let innerFrame = CGRect(origin: .zero, size: frame.size)
+        setupElements()
+        
+        if let image = image {
+            self.image = image
+        } else if let title = title {
+            self.title = title
+        }
+    }
+    
+    required public init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+        
+        setupElements()
+    }
+    
+    deinit {
+        if let superview = self.superview {
+            if observesSuperviewBounds {
+                superview.removeObserver(self, forKeyPath: "layer.bounds")
+                observesSuperviewBounds = false
+            }
+            if observesSuperviewContentOffset {
+                superview.removeObserver(self, forKeyPath: "contentOffset")
+                observesSuperviewContentOffset = false
+            }
+        }
+        if let scrollView = interactiveScrollView, observesInteractiveScrollView {
+            scrollView.removeObserver(self, forKeyPath: "contentOffset")
+            observesInteractiveScrollView = false
+        }
+    }
+    
+    
+    override open func willMove(toSuperview newSuperview: UIView?) {
+        if let superview = self.superview {
+            if observesSuperviewBounds {
+                superview.removeObserver(self, forKeyPath: "layer.bounds")
+                observesSuperviewBounds = false
+            }
+            if observesSuperviewContentOffset {
+                superview.removeObserver(self, forKeyPath: "contentOffset")
+                observesSuperviewContentOffset = false
+            }
+        }
+        
+        super.willMove(toSuperview: newSuperview)
+    }
+    
+    override open func didMoveToSuperview() {
+        if let superview = self.superview {
+            superview.addObserver(self, forKeyPath: "layer.bounds", options: .new, context: nil)
+            observesSuperviewBounds = true
+            if (floating && superview is UIScrollView) {
+                superview.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
+                observesSuperviewContentOffset = true
+            }
+        }
+        
+        super.didMoveToSuperview()
+    }
+    
+    
+    // MARK: - UI Elements Setup
+    
+    func setupElements() {
+        let innerFrame = CGRect(origin: .zero, size: self.frame.size)
+        
+        self.backgroundColor = .clear
         
         backgroundView = UIVisualEffectView(frame: innerFrame)
         backgroundView.isHidden = true
@@ -237,7 +310,6 @@ open class UPActionButton: UIView {
         self.addSubview(backgroundView)
         
         containerView = UIView(frame: innerFrame)
-        //        containerView.clipsToBounds = true
         let containerTapGesture = UITapGestureRecognizer(target: self, action: #selector(toggle))
         containerView.addGestureRecognizer(containerTapGesture)
         self.addSubview(containerView)
@@ -267,66 +339,27 @@ open class UPActionButton: UIView {
             button.addSubview(image)
         }
         
-        self.setTitleInset(dx: 10, dy: 10)
-        
-        if let image = image {
-            self.image = image
-            openTitleImageView.alpha = 1.0
-        } else if let title = title {
-            self.title = title
-            openTitleLabel.alpha = 1.0
-        }
+        setDefaultConfiguration()
     }
     
-    override open func willMove(toSuperview newSuperview: UIView?) {
-        if let superview = self.superview {
-            if observesSuperviewBounds {
-                superview.removeObserver(self, forKeyPath: superviewBoundsKeyPath)
-                observesSuperviewBounds = false
-            }
-            if observesSuperviewContentOffset {
-                superview.removeObserver(self, forKeyPath: "contentOffset")
-                observesSuperviewContentOffset = false
-            }
-        }
-        
-        super.willMove(toSuperview: newSuperview)
+    func setDefaultConfiguration() {
+        showAnimationType = .scaleUp
+        hideAnimationType = .scaleDown
+        color = .blue
+        let midSize = min(frame.size.width, frame.size.height) / 2
+        cornerRadius = midSize
+        setShadow(color: .black, opacity: 0.5, radius: 3.0, offset: CGSize(width: 0, height: 2))
+        titleColor = .white
+        titleFont = UIFont.systemFont(ofSize: midSize)
+        let inset = midSize / 2
+        setTitleInset(dx: inset, dy: inset)
+        overlayType = .plain(UIColor(white: 0.0, alpha: 0.3))
+        overlayAnimationType = .fade
+        itemsPosition = .up
+        itemsAnimationType = .bounce
+        itemsAnimationOrder = .progressive
+        itemSize = CGSize(width: midSize, height: midSize)
     }
-    
-    override open func didMoveToSuperview() {
-        if let superview = self.superview {
-            superview.addObserver(self, forKeyPath: superviewBoundsKeyPath, options: .new, context: nil)
-            observesSuperviewBounds = true
-            if (floating && superview is UIScrollView) {
-                superview.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
-                observesSuperviewContentOffset = true
-            }
-        }
-        
-        super.didMoveToSuperview()
-    }
-    
-    required public init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    deinit {
-        if let superview = self.superview {
-            if observesSuperviewBounds {
-                superview.removeObserver(self, forKeyPath: superviewBoundsKeyPath)
-                observesSuperviewBounds = false
-            }
-            if observesSuperviewContentOffset {
-                superview.removeObserver(self, forKeyPath: "contentOffset")
-                observesSuperviewContentOffset = false
-            }
-        }
-        if let scrollView = interactiveScrollView, observesInteractiveScrollView {
-            scrollView.removeObserver(self, forKeyPath: "contentOffset")
-            observesInteractiveScrollView = false
-        }
-    }
-    
 }
 
 
@@ -350,6 +383,7 @@ extension UPActionButton {
             label.layer.anchorPoint = anchorPoint
         }
     }
+    
     open func setTitleInset(dx: CGFloat, dy: CGFloat) {
         [openTitleLabel, closedTitleLabel, openTitleImageView, closedTitleImageView].forEach { (view: UIView) in
             view.frame = self.button.frame.insetBy(dx: dx, dy: dy)
@@ -445,8 +479,6 @@ extension UPActionButton {
         delegate?.actionButtonWillOpen?(self)
         
         isAnimatingOpenClose = true
-        animatedItemTag = 0
-        
         expandContainers()
         expandOverlay()
         expandItems()
@@ -459,8 +491,6 @@ extension UPActionButton {
         delegate?.actionButtonWillClose?(self)
         
         isAnimatingOpenClose = true
-        animatedItemTag = 0
-        
         reduceOverlay()
         reduceItems()
         transitionButtonTitle()
@@ -470,7 +500,7 @@ extension UPActionButton {
     /* Observers */
     
     override open func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        if (object as? UIView) == superview && keyPath == superviewBoundsKeyPath {
+        if (object as? UIView) == superview && keyPath == "layer.bounds" {
             guard let superview = self.superview, isOpen else { return }
             
             let superFrame = CGRect(origin: .zero, size: superview.frame.size)
@@ -484,6 +514,7 @@ extension UPActionButton {
             let margin: CGFloat = isOpen ? 0 : 20
             var frame = self.frame
             frame.origin.y = scrollView.frame.size.height - frame.size.height - margin + scrollView.contentOffset.y
+            print("Origin y : \(frame.origin.y)")
             self.frame = frame
         }
         
@@ -713,7 +744,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                         if self.itemsAnimationOrder == .progressive {
                             durationOffset = Double(index) * duration / Double(self.items.count)
                         } else if self.itemsAnimationOrder == .progressiveInverse {
-                            durationOffset = Double(self.items.count - index) * duration / Double(self.items.count)
+                            durationOffset = Double(self.items.count - (index + 1)) * duration / Double(self.items.count)
                         }
                         duration += durationOffset
                         duration *= 2
@@ -827,54 +858,6 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         return radius * 2
     }
 
-    
-//    fileprivate func move(item: UPActionButtonItem, to center: CGPoint, duration: TimeInterval, opening: Bool, bouncing: Bool) {
-//        let animation = CAKeyframeAnimation(keyPath: "position")
-//        
-//        let path = CGMutablePath()
-//        path.move(to: item.center)
-//        if bouncing {
-//            var bouncingOffset: CGFloat = itemsInterSpacing
-//            if itemsPosition == .up {
-//                bouncingOffset *= -1
-//            }
-//            if opening {
-//                path.addLine(to: CGPoint(x: center.x, y: center.y + bouncingOffset))
-//                path.addLine(to: CGPoint(x: center.x, y: center.y - (bouncingOffset / 2.0)))
-//            } else {
-//                path.addLine(to: CGPoint(x: item.center.x, y: item.center.y + bouncingOffset))
-//            }
-//        }
-//        path.addLine(to: center)
-//        animation.path = path
-//        
-//        animation.duration = duration
-//        animation.timingFunction = CAMediaTimingFunction(name: kCAMediaTimingFunctionEaseIn)
-//        animation.delegate = self
-//        item.layer.add(animation, forKey: "positionAnimation")
-//        
-//        item.center = center
-//    }
-    
-//    public func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
-//        itemAnimationDidStop()
-//    }
-    
-//    fileprivate func itemAnimationDidStop() {
-//        animatedItemTag += 1
-//        guard animatedItemTag >= items.count else { return }
-//        
-//        isOpen = !isOpen
-//        if isOpen {
-//            delegate?.actionButtonDidOpen?(self)
-//        }
-//        else {
-//            reduceContainers()
-//            delegate?.actionButtonDidClose?(self)
-//        }
-//        
-//        isAnimatingOpenClose = false
-//    }
     
     /* Animations */
     
@@ -1042,29 +1025,27 @@ extension UPActionButton {
     
     fileprivate func appearAnimations(type: UPActionButtonDisplayAnimationType) -> AnimationSteps {
         let initialContainerFrame = containerView.frame
-        let translationOffset: CGFloat = 20.0
-        let scaleOffset: CGFloat = 0.5
         
         return (preparation: {
             var containerFrame = self.containerView.frame
             switch type {
             case .none: break
             case .slideDown:
-                containerFrame.origin.y -= translationOffset
+                containerFrame.origin.y -= self.slideAnimationOffset
                 self.containerView.frame = containerFrame
             case .slideUp:
-                containerFrame.origin.y += translationOffset
+                containerFrame.origin.y += self.slideAnimationOffset
                 self.containerView.frame = containerFrame
             case .slideLeft:
-                containerFrame.origin.x += translationOffset
+                containerFrame.origin.x += self.slideAnimationOffset
                 self.containerView.frame = containerFrame
             case .slideRight:
-                containerFrame.origin.x -= translationOffset
+                containerFrame.origin.x -= self.slideAnimationOffset
                 self.containerView.frame = containerFrame
             case .scaleDown:
-                self.containerView.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
+                self.containerView.transform = CGAffineTransform(scaleX: 1 + self.scaleAnimationOffset, y: 1 + self.scaleAnimationOffset)
             case .scaleUp:
-                self.containerView.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
+                self.containerView.transform = CGAffineTransform(scaleX: 1 - self.scaleAnimationOffset, y: 1 - self.scaleAnimationOffset)
             }
             
             self.isHidden = false
@@ -1078,8 +1059,6 @@ extension UPActionButton {
     
     fileprivate func disappearAnimations(type: UPActionButtonDisplayAnimationType) -> AnimationSteps {
         let initialContainerFrame = containerView.frame
-        let translationOffset: CGFloat = 20.0
-        let scaleOffset: CGFloat = 0.5
         
         return (preparation: {
             self.containerView.alpha = 1.0
@@ -1088,21 +1067,21 @@ extension UPActionButton {
             switch type {
             case .none: break
             case .slideDown:
-                containerFrame.origin.y += translationOffset
+                containerFrame.origin.y += self.slideAnimationOffset
                 self.containerView.frame = containerFrame
             case .slideUp:
-                containerFrame.origin.y -= translationOffset
+                containerFrame.origin.y -= self.slideAnimationOffset
                 self.containerView.frame = containerFrame
             case .slideLeft:
-                containerFrame.origin.x -= translationOffset
+                containerFrame.origin.x -= self.slideAnimationOffset
                 self.containerView.frame = containerFrame
             case .slideRight:
-                containerFrame.origin.x += translationOffset
+                containerFrame.origin.x += self.slideAnimationOffset
                 self.containerView.frame = containerFrame
             case .scaleDown:
-                self.containerView.transform = CGAffineTransform(scaleX: 1 - scaleOffset, y: 1 - scaleOffset)
+                self.containerView.transform = CGAffineTransform(scaleX: 1 - self.scaleAnimationOffset, y: 1 - self.scaleAnimationOffset)
             case .scaleUp:
-                self.containerView.transform = CGAffineTransform(scaleX: 1 + scaleOffset, y: 1 + scaleOffset)
+                self.containerView.transform = CGAffineTransform(scaleX: 1 + self.scaleAnimationOffset, y: 1 + self.scaleAnimationOffset)
             }
             
             self.containerView.alpha = 0.0
@@ -1123,7 +1102,7 @@ extension UPActionButton {
         case .rotate(let degrees):
             guard let titleView = self.visibleOpenTitleView else { return }
             let radians = degrees * .pi / 180
-            UIView.animate(withDuration: duration, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 5.0, options: .curveEaseInOut, animations: {
+            UIView.animate(withDuration: duration, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.0, options: .curveEaseInOut, animations: {
                 titleView.transform = opening ? CGAffineTransform(rotationAngle: radians) : CGAffineTransform.identity
             }, completion: nil)
             
