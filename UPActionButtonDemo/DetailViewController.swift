@@ -49,7 +49,8 @@ class DetailViewController: UIViewController, UPActionButtonDelegate {
     func customizeButton() {
         shareButton.buttonTransitionType = .crossDissolveImage(#imageLiteral(resourceName: "close"))
         shareButton.overlayAnimationType = .bubble
-        shareButton.itemsAnimationOrder = .progressiveInverse
+        shareButton.itemsPosition = .roundQuarterUp
+        shareButton.itemsInterSpacing = 30
         shareButton.setShadow(color: .clear, opacity: 0, radius: 0, offset: .zero)
     }
 

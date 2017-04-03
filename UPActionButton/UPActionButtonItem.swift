@@ -45,6 +45,13 @@ open class UPActionButtonItem: UIView {
         return CGSize(width: titleLabelSize.width + titleInsets.left * 2, height: titleLabelSize.height + titleInsets.top * 2)
     }
     
+    internal var size: CGSize = .zero {
+        didSet {
+            updateElementsSizes()
+            layoutElements()
+        }
+    }
+    
     public var delegate: UPActionButtonItemDelegate?
     
     /* Customization */
@@ -58,12 +65,6 @@ open class UPActionButtonItem: UIView {
     public var cornerRadius: CGFloat {
         get { return button.layer.cornerRadius }
         set { button.layer.cornerRadius = newValue }
-    }
-    public var size: CGSize = .zero {
-        didSet {
-            updateElementsSizes()
-            layoutElements()
-        }
     }
     // Title
     public var titlePosition: UPActionButtonItemTitlePosition = .left {

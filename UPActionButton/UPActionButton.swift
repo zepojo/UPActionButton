@@ -43,7 +43,9 @@ public enum UPActionButtonOverlayAnimationType {
 public enum UPActionButtonItemsPosition {
     case up
     case down
-    // case round, halfRoundUp, halfRoundDown ...
+    case round, roundHalfUp, roundHalfRight, roundHalfDown, roundHalfLeft
+    case roundQuarterUp, roundQuarterUpRight, roundQuarterRight, roundQuarterDownRight
+    case roundQuarterDown, roundQuarterDownLeft, roundQuarterLeft, roundQuarterUpLeft
 }
 
 public enum UPActionButtonItemsAnimationType {
@@ -586,10 +588,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         containerFrame.origin = CGPoint(x: origin.x - superOrigin.x, y: origin.y - superOrigin.y)
         containerFrame.size = containerOpenSize
         containerFrame.origin.x -= buttonOpenCenter.x - button.frame.size.width / 2.0
-        if itemsPosition == .up {
-            let yOffset: CGFloat = buttonOpenCenter.y - button.frame.size.height / 2.0
-            containerFrame.origin.y -= yOffset
-        }
+        containerFrame.origin.y -= buttonOpenCenter.y - button.frame.size.height / 2.0
         containerView.frame = containerFrame
         
         button.center = buttonOpenCenter
@@ -795,43 +794,26 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
     /* Geometry Computations */
     
     fileprivate func computeOpenSize() {
-        let center = CGPoint(x: button.frame.size.width / 2.0, y: button.frame.size.height / 2.0)
-        var height: CGFloat = button.frame.size.height
-        var leftOffset: CGFloat = 0
-        var rightOffset: CGFloat = 0
+        let center = button.center
         
-        items.forEach { (item: UPActionButtonItem) in
-            height += item.frame.size.height + self.itemsInterSpacing
+        var topLeftCorner = button.frame.origin
+        var bottomRightCorner = CGPoint(x: button.frame.origin.x + button.frame.size.width, y: button.frame.origin.y + button.frame.size.height)
+        for (index, item) in self.items.enumerated() {
             
-            switch item.titlePosition {
-            case .left:
-                let itemLeftOffset = item.center.x - item.frame.origin.x - center.x
-                leftOffset = max(leftOffset, itemLeftOffset)
-            case .right:
-                let itemRightOffset = item.frame.size.width - item.center.x - center.x
-                rightOffset = max(rightOffset, itemRightOffset)
-            }
+            let itemLeftOffset = item.center.x - item.frame.origin.x
+            let itemRightOffset = item.frame.origin.x + item.frame.size.width - item.center.x
+            let itemTopOffset = item.center.y - item.frame.origin.y
+            let itemBottomOffset = item.frame.origin.y + item.frame.size.height - item.center.y
             
+            let itemCenter = self.center(forItem: item, index: index, itemsPosition: self.itemsPosition, opening: true)
+            topLeftCorner = CGPoint(x: min(topLeftCorner.x, itemCenter.x - itemLeftOffset), y: min(topLeftCorner.y, itemCenter.y - itemTopOffset))
+            bottomRightCorner = CGPoint(x: max(bottomRightCorner.x, itemCenter.x + itemRightOffset), y: max(bottomRightCorner.y, itemCenter.y + itemBottomOffset))
         }
         
-        if items.count > 0 {
-            height += itemsInterSpacing
-        }
-        let width: CGFloat = leftOffset + button.frame.size.width + rightOffset
-        
-        containerOpenSize = CGSize(width: width, height: height)
-        var baseButtonCenterY: CGFloat = 0
-        
-        switch itemsPosition {
-        case .up:
-            baseButtonCenterY = containerOpenSize.height - button.frame.size.height / 2.0
-        case .down:
-            baseButtonCenterY = button.frame.size.height / 2.0
-        }
-        
-        buttonOpenCenter = CGPoint(x: leftOffset + button.frame.size.width / 2.0, y: baseButtonCenterY)
+        containerOpenSize = CGSize(width: bottomRightCorner.x - topLeftCorner.x, height: bottomRightCorner.y - topLeftCorner.y)
+        buttonOpenCenter = CGPoint(x: abs(center.x - topLeftCorner.x), y: abs(center.y - topLeftCorner.y))
     }
-    
+   
     fileprivate func center(forItem item: UPActionButtonItem, index: Int, itemsPosition position: UPActionButtonItemsPosition, opening: Bool) -> CGPoint {
         var center = button.center
         
@@ -845,19 +827,56 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                 center.y = buttonFrame.origin.y - itemOffset + itemSize.height / 2
             case .down:
                 center.y = buttonFrame.origin.y + buttonFrame.size.height + itemOffset - itemSize.height / 2
+            case .round,
+                 .roundHalfUp, .roundHalfRight, .roundHalfDown, .roundHalfLeft,
+                 .roundQuarterUp, .roundQuarterUpRight, .roundQuarterRight, .roundQuarterDownRight,
+                 .roundQuarterDown, .roundQuarterDownLeft, .roundQuarterLeft, .roundQuarterUpLeft:
+                let radius = self.itemsInterSpacing + button.frame.size.width / 2 + self.itemSize.width / 2
+                let angles = self.angles(forItemsRoundPosition: position)
+                var count = CGFloat(self.items.count)
+                if position != .round {
+                    count -= 1
+                }
+                let angle = (angles.max / count * CGFloat(index) + angles.start)
+                let xOffset = radius * cos(radians(degrees: angle)) * -1
+                let yOffset = radius * sin(radians(degrees: angle)) * -1
+                center.x += xOffset
+                center.y += yOffset
             }
         }
         
         return center
     }
     
+    fileprivate func angles(forItemsRoundPosition position: UPActionButtonItemsPosition) -> (max: CGFloat, start: CGFloat) {
+        switch position {
+        case .round:                    return (max: 360, start: 0)
+        case .roundHalfUp:              return (max: 180, start: 0)
+        case .roundHalfRight:           return (max: 180, start: 90)
+        case .roundHalfDown:            return (max: 180, start: 180)
+        case .roundHalfLeft:            return (max: 180, start: 270)
+        case .roundQuarterUp:           return (max: 90, start: 45)
+        case .roundQuarterUpRight:      return (max: 90, start: 90)
+        case .roundQuarterRight:        return (max: 90, start: 135)
+        case .roundQuarterDownRight:    return (max: 90, start: 180)
+        case .roundQuarterDown:         return (max: 90, start: 225)
+        case .roundQuarterDownLeft:     return (max: 90, start: 270)
+        case .roundQuarterLeft:         return (max: 90, start: 315)
+        case .roundQuarterUpLeft:       return (max: 90, start: 0)
+        default:                        return (max: 0, start: 0)
+        }
+    }
+    
     fileprivate func coveringBubbleDiameter(for center: CGPoint) -> CGFloat {
         let maxOffsetX = max(center.x, self.frame.size.width - center.x)
-        let maxOffsetY = max(center.y, self.frame.size.width - center.y)
+        let maxOffsetY = max(center.y, self.frame.size.height - center.y)
         let radius = sqrt(pow(maxOffsetX, 2) + pow(maxOffsetY, 2))
         return radius * 2
     }
 
+    fileprivate func radians(degrees: CGFloat) -> CGFloat {
+        return degrees * .pi / 180
+    }
     
     /* Animations */
     
@@ -1101,9 +1120,9 @@ extension UPActionButton {
             
         case .rotate(let degrees):
             guard let titleView = self.visibleOpenTitleView else { return }
-            let radians = degrees * .pi / 180
+            let angle = radians(degrees: degrees)
             UIView.animate(withDuration: duration, delay: 0.0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.0, options: .curveEaseInOut, animations: {
-                titleView.transform = opening ? CGAffineTransform(rotationAngle: radians) : CGAffineTransform.identity
+                titleView.transform = opening ? CGAffineTransform(rotationAngle: angle) : CGAffineTransform.identity
             }, completion: nil)
             
         case .crossDissolveText(let title):
