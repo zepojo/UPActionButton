@@ -113,7 +113,7 @@ open class UPActionButton: UIView {
     fileprivate let interactiveScrollDistance: CGFloat = 64.0
     
     fileprivate(set) var items = [UPActionButtonItem]()
-    fileprivate(set) var isOpen = false
+    public fileprivate(set) var isOpen = false
     
     public var delegate: UPActionButtonDelegate?
 
