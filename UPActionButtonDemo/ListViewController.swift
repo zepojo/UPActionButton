@@ -21,11 +21,7 @@ class ListViewController: UITableViewController, UPActionButtonDelegate {
         self.tableView.register(UINib(nibName: "DemoTableViewCell", bundle: nil), forCellReuseIdentifier: "DemoTableViewCell")
         
         actionButton = createActionButton()
-        
-        var buttonFrame = actionButton.frame
-        buttonFrame.origin.x = self.view.frame.size.width - buttonFrame.size.width - 20
-        buttonFrame.origin.y = self.view.frame.size.height - buttonFrame.size.height - 20
-        actionButton.frame = buttonFrame
+        actionButton.position = .bottomRight(padding: CGPoint(x: 30, y: 30))
         self.navigationController?.view.addSubview(actionButton)
     }
     

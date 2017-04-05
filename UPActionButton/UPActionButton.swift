@@ -16,6 +16,14 @@ import UIKit
     @objc optional func actionButtonDidClose(_: UPActionButton)
 }
 
+public enum UPActionButtonPosition {
+    case free(center: CGPoint)
+    case topLeft(padding: CGPoint)
+    case topRight(padding: CGPoint)
+    case bottomLeft(padding: CGPoint)
+    case bottomRight(padding: CGPoint)
+}
+
 public enum UPActionButtonDisplayAnimationType {
     case none
     case slideUp, slideDown, slideLeft, slideRight
@@ -135,8 +143,13 @@ open class UPActionButton: UIView {
     }
     
     /* Customization */
-    public var animationDuration: TimeInterval = 0.4
+    public var animationDuration: TimeInterval = 0.3
     // Button
+    public var position: UPActionButtonPosition = .free(center: .zero) {
+        didSet {
+            updateButtonPosition()
+        }
+    }
     public var showAnimationType: UPActionButtonDisplayAnimationType = .none
     public var hideAnimationType: UPActionButtonDisplayAnimationType = .none
     public var buttonTransitionType: UPActionButtonTransitionType = .none
@@ -254,7 +267,7 @@ open class UPActionButton: UIView {
     deinit {
         if let superview = self.superview {
             if observesSuperviewBounds {
-                superview.removeObserver(self, forKeyPath: "layer.bounds")
+                superview.removeObserver(self, forKeyPath: "frame")
                 observesSuperviewBounds = false
             }
             if observesSuperviewContentOffset {
@@ -272,7 +285,7 @@ open class UPActionButton: UIView {
     override open func willMove(toSuperview newSuperview: UIView?) {
         if let superview = self.superview {
             if observesSuperviewBounds {
-                superview.removeObserver(self, forKeyPath: "layer.bounds")
+                superview.removeObserver(self, forKeyPath: "frame")
                 observesSuperviewBounds = false
             }
             if observesSuperviewContentOffset {
@@ -286,7 +299,10 @@ open class UPActionButton: UIView {
     
     override open func didMoveToSuperview() {
         if let superview = self.superview {
-            superview.addObserver(self, forKeyPath: "layer.bounds", options: .new, context: nil)
+            
+            updateButtonPosition()
+            
+            superview.addObserver(self, forKeyPath: "frame", options: .new, context: nil)
             observesSuperviewBounds = true
             if (floating && superview is UIScrollView) {
                 superview.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
@@ -340,6 +356,9 @@ open class UPActionButton: UIView {
             image.contentMode = .scaleAspectFill
             button.addSubview(image)
         }
+        
+        let center = CGPoint(x: self.frame.origin.x + self.frame.size.width / 2, y: self.frame.origin.y + self.frame.size.height / 2)
+        self.position = .free(center: center)
         
         setDefaultConfiguration()
     }
@@ -502,22 +521,28 @@ extension UPActionButton {
     /* Observers */
     
     override open func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        if (object as? UIView) == superview && keyPath == "layer.bounds" {
-            guard let superview = self.superview, isOpen else { return }
+        if (object as? UIView) == superview && keyPath == "frame" {
+            guard let superview = self.superview else { return }
             
-            let superFrame = CGRect(origin: .zero, size: superview.frame.size)
-            self.frame = superFrame
-            backgroundView.frame = superFrame
+            if isOpen {
+                let superFrame = CGRect(origin: .zero, size: superview.frame.size)
+                self.frame = superFrame
+                backgroundView.frame = superFrame
+            }
+            
+            self.updateButtonPosition()
         }
         
         if (object as? UIView) == superview && keyPath == "contentOffset" && floating {
             guard let scrollView = self.superview as? UIScrollView else { return }
             
-            let margin: CGFloat = isOpen ? 0 : 20
-            var frame = self.frame
-            frame.origin.y = scrollView.frame.size.height - frame.size.height - margin + scrollView.contentOffset.y
-            print("Origin y : \(frame.origin.y)")
-            self.frame = frame
+            if isOpen {
+                var frame = self.frame
+                frame.origin.y = scrollView.contentOffset.y
+                self.frame = frame
+            } else {
+                self.updateButtonPosition()
+            }
         }
         
         if (object as? UIScrollView) == interactiveScrollView && keyPath == "contentOffset" {
@@ -1002,6 +1027,60 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
 
 // MARK: - Private Helpers (Button)
 extension UPActionButton {
+    
+    fileprivate func updateButtonPosition() {
+        let superSize: CGSize = superview?.frame.size ?? .zero
+        var contentOffset: CGPoint = .zero
+        if let scrollView = superview as? UIScrollView, floating {
+            contentOffset = scrollView.contentOffset
+        }
+        if !isOpen {
+            var translatedCenter = self.center
+            switch position {
+            case .free(let center):
+                translatedCenter = center
+            case .topLeft(let padding):
+                translatedCenter.x = padding.x + self.frame.size.width/2
+                translatedCenter.y = padding.y + self.frame.size.height/2
+            case .topRight(let padding):
+                translatedCenter.x = superSize.width - (padding.x + self.frame.size.width/2)
+                translatedCenter.y = padding.y + self.frame.size.height/2
+            case .bottomLeft(let padding):
+                translatedCenter.x = padding.x + self.frame.size.width/2
+                translatedCenter.y = superSize.height - (padding.y + self.frame.size.height/2)
+            case .bottomRight(let padding):
+                translatedCenter.x = superSize.width - (padding.x + self.frame.size.width/2)
+                translatedCenter.y = superSize.height - (padding.y + self.frame.size.height/2)
+            }
+            translatedCenter.x += contentOffset.x
+            translatedCenter.y += contentOffset.y
+            self.center = translatedCenter
+        }
+        else {
+            var containerCenter = self.containerView.center
+            let centerHorizontalDistance = self.button.center.x - self.containerView.frame.size.width/2
+            let centerVerticalDistance = self.button.center.y - self.containerView.frame.size.height/2
+            let buttonSize = button.frame.size
+            switch position {
+            case .free(let center):
+                containerCenter.x = center.x + centerHorizontalDistance
+                containerCenter.y = center.y + centerVerticalDistance
+            case .topLeft(let padding):
+                containerCenter.x = padding.x - centerHorizontalDistance + buttonSize.width/2
+                containerCenter.y = padding.y - centerVerticalDistance + buttonSize.height/2
+            case .topRight(let padding):
+                containerCenter.x = superSize.width - (padding.x + centerHorizontalDistance + buttonSize.width/2)
+                containerCenter.y = padding.y - centerVerticalDistance + buttonSize.height/2
+            case .bottomLeft(let padding):
+                containerCenter.x = padding.x - centerHorizontalDistance + buttonSize.width/2
+                containerCenter.y = superSize.height - (padding.y + centerVerticalDistance + buttonSize.height/2)
+            case .bottomRight(let padding):
+                containerCenter.x = superSize.width - (padding.x + centerHorizontalDistance + buttonSize.width/2)
+                containerCenter.y = superSize.height - (padding.y + centerVerticalDistance + buttonSize.height/2)
+            }
+            self.containerView.center = containerCenter
+        }
+    }
     
     fileprivate func handleInteractiveScroll(from scrollView: UIScrollView) {
         let scrollCurrentOffset = scrollView.contentOffset.y
