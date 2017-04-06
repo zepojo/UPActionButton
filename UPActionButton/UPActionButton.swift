@@ -124,7 +124,7 @@ open class UPActionButton: UIView {
                 observesInteractiveScrollView = false
             }
             if let scrollView = interactiveScrollView {
-                scrollView.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
+                scrollView.addObserver(self, forKeyPath: "contentOffset", options: [.old, .new], context: nil)
                 observesInteractiveScrollView = true
             }
         }
@@ -136,7 +136,7 @@ open class UPActionButton: UIView {
                 observesSuperviewContentOffset = false
             }
             if let superview = self.superview as? UIScrollView, floating {
-                superview.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
+                superview.addObserver(self, forKeyPath: "contentOffset", options: [.old, .new], context: nil)
                 observesSuperviewContentOffset = true
             }
         }
@@ -302,10 +302,10 @@ open class UPActionButton: UIView {
             
             updateButtonPosition()
             
-            superview.addObserver(self, forKeyPath: "frame", options: .new, context: nil)
+            superview.addObserver(self, forKeyPath: "frame", options: [.old, .new], context: nil)
             observesSuperviewBounds = true
             if (floating && superview is UIScrollView) {
-                superview.addObserver(self, forKeyPath: "contentOffset", options: .new, context: nil)
+                superview.addObserver(self, forKeyPath: "contentOffset", options: [.old, .new], context: nil)
                 observesSuperviewContentOffset = true
             }
         }
@@ -521,6 +521,11 @@ extension UPActionButton {
     /* Observers */
     
     override open func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        if let newValue = change?[.newKey] as? NSObject,
+            let oldValue = change?[.oldKey] as? NSObject,
+            newValue == oldValue {
+            return
+        }
         if (object as? UIView) == superview && keyPath == "frame" {
             guard let superview = self.superview else { return }
             
