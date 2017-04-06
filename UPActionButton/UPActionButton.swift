@@ -438,6 +438,10 @@ extension UPActionButton {
     open func hide(animated: Bool = true) {
         guard !isHidden && !isAnimatingShowHide else { return }
         
+        if isOpen {
+            close(animated: false)
+        }
+        
         if showAnimationType == .none || !animated {
             self.isHidden = true
             return
@@ -494,27 +498,29 @@ extension UPActionButton {
         }
     }
     
-    open func open() {
+    open func open(animated: Bool = true) {
         guard !isOpen && !isAnimatingOpenClose else { return }
         
         delegate?.actionButtonWillOpen?(self)
         
         isAnimatingOpenClose = true
+        
         expandContainers()
-        expandOverlay()
-        expandItems()
-        transitionButtonTitle()
+        expandOverlay(animated: animated)
+        expandItems(animated: animated)
+        transitionButtonTitle(animated: animated)
     }
     
-    open func close() {
+    open func close(animated: Bool = true) {
         guard isOpen && !isAnimatingOpenClose else { return }
         
         delegate?.actionButtonWillClose?(self)
         
         isAnimatingOpenClose = true
-        reduceOverlay()
-        reduceItems()
-        transitionButtonTitle()
+        
+        reduceOverlay(animated: animated)
+        reduceItems(animated: animated)
+        transitionButtonTitle(animated: animated)
     }
     
     
@@ -626,11 +632,11 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         items.forEach({ $0.center = button.center })
     }
     
-    fileprivate func expandOverlay() {
+    fileprivate func expandOverlay(animated: Bool = true) {
         backgroundView.isHidden = false
         
-        let animated = self.overlayAnimationType != .none
-        if animated {
+        let animate = animated && self.overlayAnimationType != .none
+        if animate {
             let animation = self.overlayAnimations(opening: true, type: overlayAnimationType)
             animation.preparation?()
             UIView.animate(withDuration: animationDuration, delay: 0.0, options: .curveEaseInOut, animations: {
@@ -647,7 +653,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         }
     }
     
-    fileprivate func expandItems() {
+    fileprivate func expandItems(animated: Bool = true) {
         let lastAnimatedItemIndex: Int = itemsAnimationOrder == .progressiveInverse ? 0 : self.items.count - 1
         
         for (index, item) in self.items.enumerated() {
@@ -666,11 +672,11 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
-                let animated = self.itemsAnimationType != .none
+                let animate = animated && self.itemsAnimationType != .none
                 
-                item.expand(animated: animated, duration: duration)
+                item.expand(animated: animate, duration: duration)
                 
-                if animated {
+                if animate {
                     var damping: CGFloat = 1.0
                     if self.itemsAnimationType == .bounce {
                         damping = 0.7
@@ -696,7 +702,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                 } else {
                     item.center = center
                     item.alpha = 1.0
-                    if self.overlayAnimationType == .none && index == lastAnimatedItemIndex {
+                    if index == lastAnimatedItemIndex {
                         self.openAnimationDidStop()
                     }
                 }
@@ -719,9 +725,9 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         items.forEach({ $0.center = button.center })
     }
     
-    fileprivate func reduceOverlay() {
-        let animated = self.overlayAnimationType != .none
-        if animated {
+    fileprivate func reduceOverlay(animated: Bool = true) {
+        let animate = animated && self.overlayAnimationType != .none
+        if animate {
             let animation = self.overlayAnimations(opening: false, type: overlayAnimationType)
             animation.preparation?()
             UIView.animate(withDuration: animationDuration, delay: 0.0, options: .curveEaseInOut, animations: {
@@ -739,7 +745,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
         }
     }
     
-    fileprivate func reduceItems() {
+    fileprivate func reduceItems(animated: Bool = true) {
         let lastAnimatedItemIndex: Int = itemsAnimationOrder == .progressiveInverse ? 0 : self.items.count - 1
         
         for (index, item) in self.items.enumerated() {
@@ -758,11 +764,11 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: {
-                let animated = self.itemsAnimationType != .none
+                let animate = animated && self.itemsAnimationType != .none
                 
-                item.reduce(animated: animated, duration: duration)
+                item.reduce(animated: animate, duration: duration)
                 
-                if animated {
+                if animate {
                     var damping: CGFloat = 1.0
                     var velocity: CGFloat = 0.0
                     if self.itemsAnimationType == .bounce {
@@ -792,7 +798,7 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
                 } else {
                     item.center = center
                     item.alpha = 0.0
-                    if self.overlayAnimationType == .none && index == lastAnimatedItemIndex {
+                    if index == lastAnimatedItemIndex {
                         self.closeAnimationDidStop()
                     }
                 }
@@ -1195,8 +1201,8 @@ extension UPActionButton {
         })
     }
     
-    fileprivate func transitionButtonTitle() {
-        let duration = animationDuration
+    fileprivate func transitionButtonTitle(animated: Bool = true) {
+        let duration = animated ? animationDuration : 0.0
         let opening = !isOpen
         
         switch buttonTransitionType {
