@@ -75,10 +75,6 @@ open class UPActionButton: UIView {
         case none, up, down
     }
     
-    fileprivate enum ToggleAction {
-        case open, close
-    }
-    
     fileprivate typealias AnimationSteps = (preparation: (() -> Void)?, animation: (() -> Void)?, completion: (() -> Void)?)
     
     // MARK: - Properties
@@ -103,7 +99,6 @@ open class UPActionButton: UIView {
     fileprivate var buttonOpenCenter: CGPoint = .zero
     fileprivate var isAnimatingOpenClose = false
     fileprivate var isAnimatingShowHide = false
-    fileprivate var bufferedAction: ToggleAction?
     
     fileprivate let slideAnimationOffset: CGFloat = 20.0
     fileprivate let scaleAnimationOffset: CGFloat = 0.5
@@ -500,11 +495,7 @@ extension UPActionButton {
     }
     
     open func open() {
-        guard !isOpen else { return }
-        guard !isAnimatingOpenClose else {
-            bufferedAction = bufferedAction ?? .open
-            return
-        }
+        guard !isOpen && !isAnimatingOpenClose else { return }
         
         delegate?.actionButtonWillOpen?(self)
         
@@ -513,16 +504,10 @@ extension UPActionButton {
         expandOverlay()
         expandItems()
         transitionButtonTitle()
-        
-        isOpen = true
     }
     
     open func close() {
-        guard isOpen else { return }
-        guard !isAnimatingOpenClose else {
-            bufferedAction = bufferedAction ?? .close
-            return
-        }
+        guard isOpen && !isAnimatingOpenClose else { return }
         
         delegate?.actionButtonWillClose?(self)
         
@@ -530,8 +515,6 @@ extension UPActionButton {
         reduceOverlay()
         reduceItems()
         transitionButtonTitle()
-        
-        isOpen = false
     }
     
     
@@ -819,34 +802,22 @@ extension UPActionButton/*: CAAnimationDelegate*/ {
     
     
     fileprivate func openAnimationDidStop() {
-//        guard !isOpen else { return }
+        guard !isOpen else { return }
         
-//        isOpen = true
+        isOpen = true
         delegate?.actionButtonDidOpen?(self)
         
-        animationDidStop()
+        isAnimatingOpenClose = false
     }
     
     fileprivate func closeAnimationDidStop() {
-//        guard isOpen else { return }
+        guard isOpen else { return }
         
-//        isOpen = false
+        isOpen = false
         reduceContainers()
         delegate?.actionButtonDidClose?(self)
         
-        animationDidStop()
-    }
-    
-    fileprivate func animationDidStop() {
         isAnimatingOpenClose = false
-        
-        if let action = bufferedAction {
-            switch action {
-            case .open: open()
-            case .close: close()
-            }
-            bufferedAction = nil
-        }
     }
     
     
